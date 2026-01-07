@@ -122,8 +122,8 @@ class FNBParser(BaseBankParser):
             if not line:
                 continue
 
-            # Detect start of transactions section
-            if "Transactions in RAND" in line:
+            # Detect start of transactions section (handle with/without space)
+            if "Transactions in" in line and "RAND" in line:
                 in_transactions = True
                 continue
 
