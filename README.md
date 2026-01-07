@@ -193,4 +193,5 @@ The `statements/` and `data/` directories are gitignored by default.
 
 ## License
 
-MIT
+GPLv3
+
