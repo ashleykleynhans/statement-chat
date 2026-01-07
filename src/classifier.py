@@ -40,10 +40,19 @@ class TransactionClassifier:
         self._client = ollama.Client(host=f"http://{host}:{port}")
 
     def _check_rules(self, description: str) -> str | None:
-        """Check if description matches any classification rules."""
+        """Check if description matches any classification rules.
+
+        Matches work with or without spaces to handle PDF extraction variations.
+        """
         desc_lower = description.lower()
+        desc_no_spaces = desc_lower.replace(" ", "")
+
         for pattern, category in self.classification_rules.items():
-            if pattern.lower() in desc_lower:
+            pattern_lower = pattern.lower()
+            pattern_no_spaces = pattern_lower.replace(" ", "")
+
+            # Check both with spaces and without spaces
+            if pattern_lower in desc_lower or pattern_no_spaces in desc_no_spaces:
                 return category
         return None
 
