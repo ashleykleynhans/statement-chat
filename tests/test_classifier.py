@@ -62,6 +62,18 @@ class TestRulesBasedClassification:
         result = classifier._check_rules("ShellFuelStation")
         assert result == "fuel"
 
+    def test_boundary_space_pattern_not_match_substring(self, classifier):
+        """Test patterns with boundary spaces don't match substrings."""
+        # " Dr " should NOT match "Withdrawal" even though it contains "dr"
+        result = classifier._check_rules("Paypal Withdrawal")
+        assert result is None  # Should not match medical
+
+    def test_boundary_space_pattern_matches_word(self, classifier):
+        """Test patterns with boundary spaces match actual words."""
+        # " Dr " should match " Dr Smith"
+        result = classifier._check_rules("Payment Dr Smith Medical")
+        assert result == "medical"
+
 
 class TestLLMClassification:
     """Tests for LLM-based classification."""
