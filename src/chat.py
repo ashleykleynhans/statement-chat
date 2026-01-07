@@ -213,11 +213,19 @@ class ChatInterface:
 
     def _get_llm_response(self, query: str, context: str) -> str:
         """Get response from Ollama LLM."""
-        system_prompt = """You are a helpful assistant that answers questions about bank transactions.
+        today = datetime.now()
+        current_date = today.strftime("%Y-%m-%d")
+        current_month = today.strftime("%B %Y")
+        last_month = (today.replace(day=1) - timedelta(days=1)).strftime("%B %Y")
+
+        system_prompt = f"""You are a helpful assistant that answers questions about bank transactions.
 You have access to the user's transaction history. Be concise and helpful.
 When mentioning amounts, use South African Rand (R) currency.
 If you can't find the specific information requested, say so and suggest what else might be helpful.
-Remember the conversation history to answer follow-up questions."""
+Remember the conversation history to answer follow-up questions.
+
+IMPORTANT: Today's date is {current_date}. The current month is {current_month}. Last month was {last_month}.
+Use these dates when interpreting time-based queries like "last month" or "this month"."""
 
         user_message = f"""Context about the user's transactions:
 {context}

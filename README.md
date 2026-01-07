@@ -10,12 +10,14 @@ interface to query your transaction history.
 - **Auto-Classification**: Uses Ollama to categorize transactions (doctor, groceries, utilities, etc.)
 - **Chat Interface**: Ask natural language questions about your spending
 - **REST + WebSocket API**: Integrate with frontend applications
+- **Web Frontend**: Svelte-based dashboard with chat, transactions, and analytics
 - **File Watcher**: Automatically imports new statements when added
 - **Extensible**: Easy to add support for new banks
 
 ## Requirements
 
 - Python 3.10+
+- Node.js 18+ (for frontend)
 - [Ollama](https://ollama.ai/) running locally
 
 ## Installation
@@ -227,6 +229,52 @@ Connect to `ws://localhost:8000/ws/chat` for real-time chat.
 
 Each WebSocket connection maintains its own conversation history for follow-up questions.
 
+## Web Frontend
+
+A Svelte-based web interface is included in the `frontend/` directory.
+
+### Frontend Setup
+
+```bash
+# Install frontend dependencies
+cd frontend
+npm install
+
+# Start development server (runs on port 5173)
+npm run dev
+```
+
+### Running Full Stack
+
+You need two terminals:
+
+```bash
+# Terminal 1: Start the backend API
+source .venv/bin/activate
+python -m src.main serve
+
+# Terminal 2: Start the frontend
+cd frontend
+npm run dev
+```
+
+Then open http://localhost:5173 in your browser.
+
+### Frontend Features
+
+- **Chat**: Real-time WebSocket chat with transaction context
+- **Dashboard**: Stats overview and spending by category chart
+- **Transactions**: Searchable, filterable transaction list with pagination
+
+### Building for Production
+
+```bash
+cd frontend
+npm run build
+```
+
+The built files will be in `frontend/dist/`.
+
 ## Project Structure
 
 ```
@@ -250,6 +298,13 @@ statement-chat/
 │       ├── base.py      # Base parser class
 │       ├── fnb.py       # FNB parser
 │       └── __init__.py  # Parser registry
+├── frontend/             # Svelte web frontend
+│   ├── src/
+│   │   ├── App.svelte   # Main app layout
+│   │   ├── lib/         # API client, WebSocket, stores
+│   │   └── components/  # UI components
+│   ├── package.json
+│   └── vite.config.js
 ├── tests/                # Test suite
 ├── config.yaml
 └── pyproject.toml

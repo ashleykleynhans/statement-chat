@@ -53,3 +53,8 @@ Thumbs.db
 
 # Config with sensitive data (keep config.yaml.example)
 # config.yaml
+
+# Node.js / Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
