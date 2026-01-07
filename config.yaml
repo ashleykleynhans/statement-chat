@@ -1,0 +1,32 @@
+# Bank Statement Chat Bot Configuration
+
+# Bank configuration
+bank: fnb                    # Options: fnb (more to be added)
+
+# Ollama settings
+ollama:
+  host: localhost
+  port: 11434
+  model: llama3.2           # Model for classification and chat
+
+# Paths
+paths:
+  statements_dir: ./statements
+  database: ./data/statements.db
+
+# Classification categories (customizable)
+categories:
+  - doctor
+  - optician
+  - groceries
+  - garden_service
+  - dog_parlour
+  - domestic_worker
+  - education
+  - fuel
+  - utilities
+  - insurance
+  - entertainment
+  - transfer
+  - salary
+  - other
