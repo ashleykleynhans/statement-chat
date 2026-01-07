@@ -141,8 +141,8 @@ Rules:
     def check_connection(self) -> bool:
         """Check if Ollama is available and the model is loaded."""
         try:
-            models = self._client.list()
-            model_names = [m["name"].split(":")[0] for m in models.get("models", [])]
+            response = self._client.list()
+            model_names = [m.model.split(":")[0] for m in response.models]
             return self.model.split(":")[0] in model_names
         except Exception:
             return False
@@ -150,7 +150,7 @@ Rules:
     def get_available_models(self) -> list[str]:
         """Get list of available Ollama models."""
         try:
-            models = self._client.list()
-            return [m["name"] for m in models.get("models", [])]
+            response = self._client.list()
+            return [m.model for m in response.models]
         except Exception:
             return []
