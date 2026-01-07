@@ -48,6 +48,18 @@ classification_rules:
   "Dentist": medical
   "Optom": medical
 
+  # Education (check before eft_payment)
+  "School Fees": education
+
+  # Domestic worker
+  "Sweep South": domestic_worker
+
+  # Entertainment
+  "Paddle.Net* Put.Io": entertainment
+
+  # Other specific
+  "Scw*": other
+
   # Cellphone
   "Vodacom": cellphone
   "MTN": cellphone
@@ -59,24 +71,30 @@ classification_rules:
   "Plumber": home_maintenance
   "Electrician": home_maintenance
 
-  # Fees
-  "Bank fee": fees
-  "Service Fee": fees
-  "Monthly Fee": fees
-
-  # Deposits & Savings
-  "Magtape Credit": deposit
-  "Payment To Investment": savings
-  "Investment": savings
-
-  # Transfers & Payments (general - keep last)
-  "FNB App Payment To": eft_payment
-  "Internet Pmt To": eft_payment
-  "FNB App Transfer": transfer
-
-  # Insurance
+  # Insurance (check before other)
+  "Outsurance": insurance
   "Cap Legac": insurance
   "Old Mutual": insurance
   "Sanlam": insurance
   "Discovery": insurance
   "Liberty": insurance
+
+  # Fees
+  "Bank fee": fees
+  "Service Fee": fees
+  "Monthly Fee": fees
+  "Magtape Unpaid": fees
+
+  # Deposits & Savings
+  "Magtape Credit": deposit
+  "Payment To Investment": savings
+  "Schedule Trf To Invest": savings
+
+  # Transfers (incoming and outgoing)
+  "Payment From": transfer
+  "Payshap Credit": transfer
+  "FNB App Transfer": transfer
+
+  # EFT Payments (general - keep last)
+  "FNB App Payment To": eft_payment
+  "Internet Pmt To": eft_payment

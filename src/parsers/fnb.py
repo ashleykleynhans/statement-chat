@@ -173,8 +173,8 @@ class FNBParser(BaseBankParser):
         rest = line[date_match.end():].strip()
 
         # Find amounts at the end - looking for patterns like:
-        # "720.00 18,196.65Cr" or "5,200.00Cr 16,446.75Cr"
-        # Amount pattern: optional minus, digits with optional comma separators, decimal point, 2 digits, optional Cr/Dr
+        # "720.00 18,196.65Cr" or "5,200.00Cr 16,446.75Cr" or "2,500.00 32,820.86Cr 3.30"
+        # Amount pattern: digits with optional comma separators, decimal point, 2 digits, optional Cr/Dr
         amount_pattern = r"([\d,]+\.\d{2})(Cr|Dr)?"
 
         # Find all amounts in the line
@@ -183,24 +183,21 @@ class FNBParser(BaseBankParser):
         if len(amounts) < 1:
             return None
 
-        # The last amount is usually the balance
-        # The second-to-last (or last if only one) is the transaction amount
-        if len(amounts) >= 2:
-            amount_match = amounts[-2]
-            balance_match = amounts[-1]
-        else:
-            # Only one amount - could be balance only (for fee lines) or amount only
-            # Try to determine from context
-            amount_match = amounts[-1]
-            balance_match = None
+        # FNB format: Amount | Balance | [Bank Charges]
+        # - First amount is the transaction amount
+        # - Second amount (usually with Cr/Dr suffix) is the balance
+        # - Third amount (if present) is bank charges (ignore)
+        amount_match = amounts[0]  # First amount is always the transaction
+
+        # Balance is the second amount if present
+        balance_match = amounts[1] if len(amounts) >= 2 else None
 
         # Extract description (everything between date and first amount)
         desc_end = amounts[0].start() if amounts else len(rest)
         description = rest[:desc_end].strip()
 
-        # If no description, it might be a fee line or continuation
+        # If no description, it might be a fee line
         if not description and len(amounts) >= 2:
-            # This might be a fee line with just amounts
             description = "Bank fee/charge"
 
         # Parse the amount
