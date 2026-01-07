@@ -34,6 +34,7 @@ categories:
   - groceries
   - hardware
   - home_maintenance
+  - import_duties
   - insurance
   - internet
   - lotto
@@ -52,6 +53,7 @@ categories:
   - subscriptions
   - toll
   - toys
+  - traffic_fines
   - transfer
   - transport
   - vacation
@@ -64,6 +66,10 @@ categories:
 # Format: pattern -> category
 # Note: More specific rules should come before general ones
 classification_rules:
+  # Withdrawals
+  "ATM Withdrawal": withdrawal
+  "Cash Withdrawal": withdrawal
+
   # Airtime
   "Prepaid Airtime": airtime
 
@@ -72,6 +78,9 @@ classification_rules:
   "MTN": cellphone
   "Telkom": cellphone
   "Cell C": cellphone
+
+  # Dog Parlour
+  "Dog Parlour": dog_parlour
 
   # Domestic worker
   "Domestic Worker": domestic_worker
@@ -88,6 +97,7 @@ classification_rules:
   # Entertainment
   "Ster Kinekor": entertainment
   "Nu Metro": entertainment
+  "Ticketmaster Sa": entertainment
 
   # Ewallet
   "Send Money": ewallet
@@ -133,10 +143,17 @@ classification_rules:
   "Builders": hardware
 
   # Home Maintenance
-  "Roof Repair": home_maintenance
-  "Plumber": home_maintenance
+  "Ceiling Repairs": home_maintenance
   "Electrician": home_maintenance
+  "Percy Fence": home_maintenance
+  "Plumber": home_maintenance
+  "Roof Repair": home_maintenance
   "The Pool Team": home_maintenance
+
+  # Import Duties
+  "Allport Cargo": import_duties
+  "Buffalo Internation": online_shopping
+  "Linex Air Services": import_duties
 
   # Insurance (check before other)
   "Outsurance": insurance
@@ -179,7 +196,6 @@ classification_rules:
   "Ekurhuleni": municipal
 
   # Online Shopping
-  "Buffalo Internation": online_shopping
   "Takealot": online_shopping
   "Takealo*T": online_shopping
   "Amazon": online_shopping
@@ -202,6 +218,7 @@ classification_rules:
 
   # Reversals
   "Magtape Unpaid": reversal
+  "Send Reversal": reversal
 
   # Salary
   "3Commassalary": salary
@@ -234,6 +251,7 @@ classification_rules:
   "Netflix": subscriptions
   "Showmax": subscriptions
   "*Truecaller": subscriptions
+  "Truecaller": subscriptions
   "Xtra Savings": subscriptions
 
   # Toll
@@ -245,6 +263,9 @@ classification_rules:
   "Toy Kingdom": toys
   "Hamleys": toys
   "Toys R Us": toys
+
+  # Traffic Fines
+  "Traffic Fine": traffic_fines
 
   # Transfers
   "FNB App Transfer": transfer
@@ -267,10 +288,6 @@ classification_rules:
 
   # Vehicle Maintenance
   "Alberton Tyre": vehicle_maintenance
-
-  # Withdrawals
-  "ATM Withdrawal": withdrawal
-  "Cash Withdrawal": withdrawal
 
   # Other specific
   "Scaleway": other
