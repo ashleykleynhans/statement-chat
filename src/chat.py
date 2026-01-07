@@ -180,24 +180,44 @@ class ChatInterface:
         system_prompt = """You are a helpful assistant that answers questions about bank transactions.
 You have access to the user's transaction history. Be concise and helpful.
 When mentioning amounts, use South African Rand (R) currency.
-If you can't find the specific information requested, say so and suggest what else might be helpful."""
+If you can't find the specific information requested, say so and suggest what else might be helpful.
+Remember the conversation history to answer follow-up questions."""
 
-        prompt = f"""Context about the user's transactions:
+        user_message = f"""Context about the user's transactions:
 {context}
 
 User question: {query}
 
 Please provide a helpful, concise answer based on the transaction data above."""
 
+        # Add user message to history
+        self._conversation_history.append({
+            "role": "user",
+            "content": user_message
+        })
+
         try:
-            response = self._client.generate(
+            # Build messages with system prompt and conversation history
+            messages = [{"role": "system", "content": system_prompt}]
+            messages.extend(self._conversation_history)
+
+            response = self._client.chat(
                 model=self.model,
-                prompt=prompt,
-                system=system_prompt,
+                messages=messages,
                 options={"temperature": 0.3}
             )
-            return response["response"].strip()
+            assistant_response = response["message"]["content"].strip()
+
+            # Add assistant response to history
+            self._conversation_history.append({
+                "role": "assistant",
+                "content": assistant_response
+            })
+
+            return assistant_response
         except Exception as e:
+            # Remove the failed user message from history
+            self._conversation_history.pop()
             return f"Sorry, I couldn't process your request. Error: {str(e)}"
 
     def _display_transactions(self, transactions: list[dict]) -> None:

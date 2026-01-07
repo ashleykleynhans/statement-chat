@@ -56,9 +56,11 @@ classification_rules:
 
   # Entertainment
   "Paddle.Net* Put.Io": entertainment
+  "Ekurhuleni": utilities
 
   # Other specific
   "Scw*": other
+  "Google": other
 
   # Cellphone
   "Vodacom": cellphone
