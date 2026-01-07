@@ -80,6 +80,15 @@ python -m src.main stats
 python -m src.main parsers
 ```
 
+## Re-importing Statements
+
+If you update classification rules in `config.yaml`, you'll need to clear the database and re-import to apply the new rules:
+
+```bash
+# Delete the database and re-import all statements
+rm ./data/statements.db && python -m src.main import
+```
+
 ## Chat Examples
 
 Once you've imported statements, start a chat session:
