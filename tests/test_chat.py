@@ -489,3 +489,116 @@ class TestFindRelevantTransactionsExtended:
             chat._find_relevant_transactions("show payment history")
 
             mock_db.get_all_transactions.assert_called()
+
+
+class TestFollowUpDetection:
+    """Tests for follow-up query detection."""
+
+    def test_detects_them_as_follow_up(self, mock_db):
+        """Test 'them' is detected as follow-up."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            assert chat._is_follow_up_query("group them by date") is True
+
+    def test_detects_these_as_follow_up(self, mock_db):
+        """Test 'these' is detected as follow-up."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            assert chat._is_follow_up_query("summarize these") is True
+
+    def test_detects_sort_as_follow_up(self, mock_db):
+        """Test 'sort' is detected as follow-up."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            assert chat._is_follow_up_query("sort by amount") is True
+
+    def test_detects_total_as_follow_up(self, mock_db):
+        """Test 'total' is detected as follow-up."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            assert chat._is_follow_up_query("what's the total?") is True
+
+    def test_short_query_without_keywords_is_follow_up(self, mock_db):
+        """Test short queries without specific keywords are follow-ups."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            assert chat._is_follow_up_query("by date") is True
+
+    def test_specific_query_not_follow_up(self, mock_db):
+        """Test query with specific keywords is not follow-up."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            assert chat._is_follow_up_query("show electricity transactions") is False
+
+    def test_show_query_not_follow_up(self, mock_db):
+        """Test 'show' query is not follow-up."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            assert chat._is_follow_up_query("show my groceries") is False
+
+
+class TestFollowUpContext:
+    """Tests for follow-up query context handling."""
+
+    def test_follow_up_uses_previous_transactions(self, mock_db):
+        """Test follow-up query uses previous transactions."""
+        electricity_transactions = [
+            {"date": "2025-01-15", "description": "Electricity", "amount": 500,
+             "category": "utilities", "transaction_type": "debit"}
+        ]
+        mock_db.search_transactions.return_value = electricity_transactions
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            chat._client.chat.return_value = {"message": {"content": "Response"}}
+
+            # First query - gets electricity transactions
+            chat._process_query("show electricity")
+
+            # Verify transactions were stored
+            assert chat._last_transactions == electricity_transactions
+
+            # Reset mock to track new calls
+            mock_db.search_transactions.reset_mock()
+
+            # Follow-up query should use stored transactions
+            chat._process_query("group them by month")
+
+            # Should NOT have searched for new transactions
+            mock_db.search_transactions.assert_not_called()
+
+    def test_new_query_replaces_stored_transactions(self, mock_db):
+        """Test new specific query replaces stored transactions."""
+        electricity = [{"date": "2025-01-15", "description": "Electricity", "amount": 500,
+                       "category": "utilities", "transaction_type": "debit"}]
+        groceries = [{"date": "2025-01-16", "description": "Groceries", "amount": 300,
+                     "category": "groceries", "transaction_type": "debit"}]
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            chat._client.chat.return_value = {"message": {"content": "Response"}}
+
+            # First query
+            mock_db.search_transactions.return_value = electricity
+            chat._process_query("show electricity")
+            assert chat._last_transactions == electricity
+
+            # New specific query should replace
+            mock_db.get_transactions_by_category.return_value = groceries
+            chat._process_query("show groceries")
+            assert chat._last_transactions == groceries
+
+    def test_empty_previous_transactions_fetches_new(self, mock_db):
+        """Test follow-up with no previous transactions fetches new."""
+        mock_db.get_all_transactions.return_value = []
+        mock_db.search_transactions.return_value = []
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            chat._client.chat.return_value = {"message": {"content": "Response"}}
+            chat._last_transactions = []  # Empty
+
+            # Even though it looks like follow-up, should fetch new
+            chat._process_query("group them")
+
+            mock_db.get_all_transactions.assert_called()

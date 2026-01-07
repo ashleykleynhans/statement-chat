@@ -28,6 +28,7 @@ class ChatInterface:
         self._client = ollama.Client(host=f"http://{host}:{port}")
         self.console = Console()
         self._conversation_history = []
+        self._last_transactions = []  # Store last query's transactions for follow-ups
 
     def start(self) -> None:
         """Start the interactive chat loop."""
@@ -68,8 +69,14 @@ class ChatInterface:
 
     def _process_query(self, query: str) -> None:
         """Process a user query and display the response."""
-        # First, try to understand what data the user needs
-        relevant_transactions = self._find_relevant_transactions(query)
+        # Check if this is a follow-up query about previous transactions
+        if self._is_follow_up_query(query) and self._last_transactions:
+            relevant_transactions = self._last_transactions
+        else:
+            # Find new relevant transactions
+            relevant_transactions = self._find_relevant_transactions(query)
+            # Store for potential follow-up queries
+            self._last_transactions = relevant_transactions
 
         # Build context for the LLM
         context = self._build_context(relevant_transactions, query)
@@ -82,6 +89,35 @@ class ChatInterface:
         # Show relevant transactions if found
         if relevant_transactions and len(relevant_transactions) <= 10:
             self._display_transactions(relevant_transactions)
+
+    def _is_follow_up_query(self, query: str) -> bool:
+        """Detect if query is a follow-up about previous transactions."""
+        query_lower = query.lower()
+        words = set(re.findall(r"\b\w+\b", query_lower))
+
+        # Pronouns/references that indicate follow-up
+        follow_up_indicators = {
+            "them", "these", "those", "it", "they",
+            "above", "previous", "that",
+            "group", "sort", "filter", "summarize", "total",
+            "sum", "average", "breakdown", "analyze"
+        }
+
+        # Check for follow-up indicators (word-based match)
+        if words & follow_up_indicators:
+            return True
+
+        # If query has no specific transaction keywords, might be follow-up
+        has_specific_keywords = any(word in query_lower for word in [
+            "show", "find", "search", "electricity", "groceries", "fuel",
+            "medical", "salary", "deposit", "last month", "this month"
+        ])
+
+        # Short queries without specific keywords are likely follow-ups
+        if len(query.split()) <= 5 and not has_specific_keywords:
+            return True
+
+        return False
 
     def _find_relevant_transactions(self, query: str) -> list[dict]:
         """Find transactions relevant to the user's query."""
