@@ -6,7 +6,7 @@
     getCategories,
     getTransactionsByCategory,
   } from '../lib/api.js';
-  import { formatCurrency, formatDate } from '../lib/stores.js';
+  import { formatCurrency, formatDate, filterCategory } from '../lib/stores.js';
 
   // Expanded vibrant color palette - 24 distinct colors
   const categoryColors = [
@@ -89,7 +89,17 @@
   $: canGoForward = currentPage < totalPages - 1;
 
   onMount(async () => {
-    await Promise.all([loadTransactions(), loadCategories()]);
+    await loadCategories();
+
+    // Check if there's a filter from Dashboard navigation
+    const initialFilter = $filterCategory;
+    if (initialFilter) {
+      selectedCategory = initialFilter;
+      filterCategory.set(''); // Clear the store
+      await handleCategoryChange();
+    } else {
+      await loadTransactions();
+    }
   });
 
   async function loadTransactions() {

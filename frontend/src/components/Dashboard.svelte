@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { getStats, getCategorySummary } from '../lib/api.js';
-  import { formatCurrency } from '../lib/stores.js';
+  import { formatCurrency, currentPage, filterCategory } from '../lib/stores.js';
   import CategoryChart from './CategoryChart.svelte';
 
   let stats = null;
@@ -21,6 +21,12 @@
       loading = false;
     }
   });
+
+  function handleCategorySelect(event) {
+    const { category } = event.detail;
+    filterCategory.set(category);
+    currentPage.set('transactions');
+  }
 </script>
 
 <div class="p-6 h-full overflow-y-auto">
@@ -70,7 +76,7 @@
     {#if categorySummary?.categories?.length > 0}
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <h2 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">Spending by Category</h2>
-        <CategoryChart categories={categorySummary.categories} />
+        <CategoryChart categories={categorySummary.categories} on:select={handleCategorySelect} />
       </div>
     {/if}
   {/if}
