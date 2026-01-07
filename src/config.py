@@ -28,4 +28,4 @@ def get_config() -> dict:
         if path.exists():
             return load_config(path)
 
-    raise FileNotFoundError("Could not find config.yaml in any expected location")
+    raise FileNotFoundError("Could not find config.yaml in any expected location")  # pragma: no cover
