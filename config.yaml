@@ -129,6 +129,7 @@ classification_rules:
   # Groceries
   "Woolworths": groceries
   "Checkers": groceries
+  "Multisave": groceries
   "Pick n Pay": groceries
   "PNP Fam": groceries
   "Spar": groceries
@@ -218,6 +219,7 @@ classification_rules:
   "Send Reversal": reversal
 
   # Salary
+  "3 Commas": salary
   "3Commassalary": salary
   "Salary Payment": salary
   "Three Commas": salary
@@ -298,6 +300,7 @@ classification_rules:
   "The Crazy Store": other
 
   # Deposits
+  "Credit/Deposit": deposit
   "Credit Voucher": deposit
   "FNB App Payment From": deposit
   "Payment From": transfer
