@@ -618,3 +618,112 @@ class TestFollowUpContext:
             chat._process_query("group them")
 
             mock_db.get_all_transactions.assert_called()
+
+
+class TestBudgetQueries:
+    """Tests for budget-related query handling."""
+
+    def test_budget_query_filters_to_latest_statement(self, mock_db):
+        """Test budget queries filter transactions to latest statement only."""
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": "287", "statement_date": "2025-12-01"
+        }
+        mock_db.get_transactions_by_statement.return_value = [
+            {"date": "2025-12-15", "description": "Electricity", "amount": 2000,
+             "category": "utilities", "transaction_type": "debit"}
+        ]
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            result = chat._find_relevant_transactions("How much of my electricity budget have I used?")
+
+            mock_db.get_latest_statement.assert_called()
+            mock_db.get_transactions_by_statement.assert_called_with("287")
+            assert len(result) == 1
+
+    def test_budget_query_with_category_filters_both(self, mock_db):
+        """Test budget query with category filters to latest statement AND category."""
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": "287", "statement_date": "2025-12-01"
+        }
+        mock_db.get_transactions_by_statement.return_value = [
+            {"date": "2025-12-15", "description": "Electricity", "amount": 2000,
+             "category": "utilities", "transaction_type": "debit"},
+            {"date": "2025-12-16", "description": "Groceries", "amount": 500,
+             "category": "groceries", "transaction_type": "debit"},
+        ]
+        mock_db.get_all_categories.return_value = ["utilities", "groceries"]
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            result = chat._find_relevant_transactions("How much of my utilities budget?")
+
+            # Should only return utilities transactions
+            assert len(result) == 1
+            assert result[0]["category"] == "utilities"
+
+    def test_budget_context_includes_budget_info(self, mock_db):
+        """Test build_context includes budget info for budget queries."""
+        mock_db.get_stats.return_value = {"total_transactions": 100}
+        mock_db.get_all_budgets.return_value = [
+            {"category": "utilities", "amount": 3000},
+            {"category": "groceries", "amount": 10000},
+        ]
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": "287", "statement_date": "2025-12-01"
+        }
+        mock_db.get_category_summary_for_statement.return_value = [
+            {"category": "utilities", "total_debits": 2000, "count": 1},
+            {"category": "groceries", "total_debits": 8000, "count": 5},
+        ]
+
+        transactions = [
+            {"date": "2025-12-15", "description": "Test", "amount": 2000,
+             "category": "utilities", "transaction_type": "debit"}
+        ]
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            context = chat._build_context(transactions, "How much of my budget have I used?")
+
+            assert "Budget status" in context
+            assert "utilities" in context
+            assert "R2000.00 spent of R3000.00 budget" in context
+            assert "Latest statement: #287" in context
+
+    def test_budget_context_shows_over_budget(self, mock_db):
+        """Test budget context shows OVER BUDGET status."""
+        mock_db.get_stats.return_value = {"total_transactions": 100}
+        mock_db.get_all_budgets.return_value = [
+            {"category": "utilities", "amount": 1500},
+        ]
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": "287", "statement_date": "2025-12-01"
+        }
+        mock_db.get_category_summary_for_statement.return_value = [
+            {"category": "utilities", "total_debits": 2000, "count": 1},
+        ]
+
+        transactions = [{"date": "2025-12-15", "description": "Test", "amount": 2000,
+                        "category": "utilities", "transaction_type": "debit"}]
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            context = chat._build_context(transactions, "budget status")
+
+            assert "OVER BUDGET" in context
+
+    def test_non_budget_query_no_budget_info(self, mock_db):
+        """Test non-budget queries don't include budget info."""
+        mock_db.get_stats.return_value = {"total_transactions": 100}
+
+        transactions = [{"date": "2025-12-15", "description": "Test", "amount": 500,
+                        "category": "groceries", "transaction_type": "debit"}]
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            context = chat._build_context(transactions, "show groceries")
+
+            # Should NOT have budget info
+            assert "Budget status" not in context
+            mock_db.get_all_budgets.assert_not_called()
