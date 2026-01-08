@@ -144,6 +144,17 @@ class ChatInterface:
                 matched_category = category
                 break
 
+        # If query is about budget, filter to latest statement only
+        is_budget_query = "budget" in query_lower
+        if is_budget_query:
+            latest_stmt = self.db.get_latest_statement()
+            if latest_stmt and latest_stmt.get("statement_number"):
+                stmt_num = latest_stmt["statement_number"]
+                stmt_transactions = self.db.get_transactions_by_statement(stmt_num)
+                if matched_category:
+                    return [tx for tx in stmt_transactions if tx.get("category") == matched_category]
+                return stmt_transactions
+
         # If we have both date range and category, filter by both
         if date_start and date_end and matched_category:
             all_in_range = self.db.get_transactions_in_date_range(
@@ -201,12 +212,42 @@ class ChatInterface:
             return "No matching transactions found in the database."
 
         stats = self.db.get_stats()
+        query_lower = query.lower()
 
         context_parts = [
             f"Database contains {stats['total_transactions']} transactions.",
             f"Found {len(transactions)} potentially relevant transactions.",
-            "\nRelevant transactions:"
         ]
+
+        # If query is about budget, include budget info
+        if "budget" in query_lower:
+            budgets = self.db.get_all_budgets()
+            latest_stmt = self.db.get_latest_statement()
+
+            if budgets and latest_stmt:
+                stmt_num = latest_stmt.get("statement_number")
+                stmt_date = latest_stmt.get("statement_date", "")
+                context_parts.append(f"\nLatest statement: #{stmt_num} ({stmt_date})")
+                context_parts.append("\nBudget status for latest statement:")
+
+                # Get category summary for latest statement only
+                if stmt_num:
+                    category_summary = self.db.get_category_summary_for_statement(stmt_num)
+                    actual_by_cat = {s["category"]: abs(s.get("total_debits", 0) or 0) for s in category_summary}
+
+                    for budget in budgets:
+                        cat = budget["category"]
+                        budget_amt = budget["amount"]
+                        actual = actual_by_cat.get(cat, 0)
+                        remaining = budget_amt - actual
+                        pct = (actual / budget_amt * 100) if budget_amt > 0 else 0
+                        status = "OVER BUDGET" if pct > 100 else f"{pct:.0f}% used"
+                        context_parts.append(
+                            f"- {cat}: R{actual:.2f} spent of R{budget_amt:.2f} budget "
+                            f"(R{remaining:.2f} remaining, {status})"
+                        )
+
+        context_parts.append("\nRelevant transactions:")
 
         # Limit to most relevant transactions for context
         for tx in transactions[:15]:
