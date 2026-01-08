@@ -32,6 +32,7 @@ categories:
   - garden_service
   - geo_payment
   - groceries
+  - gymnastics_lessons
   - hardware
   - home_maintenance
   - import_duties
@@ -46,11 +47,13 @@ categories:
   - parking
   - restaurants
   - reversal
+  - rugby_lessons
   - salary
   - savings
   - security
   - stationery
   - subscriptions
+  - swimming_lessons
   - toll
   - toys
   - traffic_fines
@@ -136,6 +139,9 @@ classification_rules:
   "Shoprite": groceries
   "Food Lover's Market": groceries
 
+  # Gymnastics Lessons
+  "Tiny Twisters": gymnastics_lessons
+
   # Hardware
   "Builders": hardware
 
@@ -149,7 +155,7 @@ classification_rules:
 
   # Import Duties
   "Allport Cargo": import_duties
-  "Buffalo Internation": online_shopping
+  "Buffalo Internation": import_duties
   "Linex Air Services": import_duties
 
   # Insurance (check before other)
@@ -177,18 +183,22 @@ classification_rules:
   "Powerball": lotto
 
   # Medical (check before eft_payment)
+  "Cardiologist": medical
+  "Clicks": medical
   "Ct Scan": medical
+  "Dentist": medical
+  "Dis-Chem": medical
+  "Disc Prem": medical
   " Dr ": medical
   "Doctor": medical
-  "Pharmacy": medical
-  "Dentist": medical
-  "Optom": medical
   "Hospital": medical
   "Mediclinic": medical
   "Netcare": medical
-  "Dis-Chem": medical
-  "Clicks": medical
-  "Disc Prem": medical
+  "Neurologist": medical
+  "Optical": medical
+  "Optom": medical
+  "Optometrist": medical
+  "Pharmacy": medical
 
   # Municipal
   "Ekurhuleni": municipal
@@ -218,7 +228,11 @@ classification_rules:
   "Magtape Unpaid": reversal
   "Send Reversal": reversal
 
+  # Rugby Lessons
+  "Tiny Tacklers": rugby_lessons
+
   # Salary
+  "Runpod": deposit
   "3 Commas": salary
   "3Commassalary": salary
   "Salary Payment": salary
@@ -253,6 +267,9 @@ classification_rules:
   "Truecaller": subscriptions
   "Xtra Savings": subscriptions
 
+  # Swimming Lessons
+  "Swimming": swimming_lessons
+
   # Toll
   "e-toll": toll
   "Sanral": toll
@@ -268,6 +285,7 @@ classification_rules:
 
   # Transfers
   "FNB App Transfer": transfer
+  "FNB App Payment To Transfer": transfer
 
   # Transport
   "Uber Rides": transport
@@ -293,21 +311,20 @@ classification_rules:
   "City Power": electricity
   "Electricity": electricity
 
+  # Deposits
+  "Credit/Deposit": deposit
+  "Credit Voucher": deposit
+  "FNB App Payment From": deposit
+  "Payment From": deposit
+  "Magtape Credit": deposit
+  "Paypal Withdrawal": deposit
+  "Payshap Credit": deposit
+
   # Other specific
   "Scaleway": other
   "Scw*": other
   "Google": other
   "The Crazy Store": other
-
-  # Deposits
-  "Credit/Deposit": deposit
-  "Credit Voucher": deposit
-  "FNB App Payment From": deposit
-  "Payment From": transfer
-  "Magtape Credit": deposit
-  "Paypal Withdrawal": deposit
-  "Payshap Credit": deposit
-  "Runpod": deposit
 
   # EFT Payments (general - keep last)
   "FNB App Payment To": eft_payment
