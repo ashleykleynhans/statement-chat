@@ -1,8 +1,8 @@
-# Bank Statement Chat Bot
+# BankBot
 
-A CLI application that parses PDF bank statements, imports them into SQLite,
-auto-classifies transactions using a local LLM (Ollama), and provides a chat
-interface to query your transaction history.
+A local-first application that parses PDF bank statements, auto-classifies transactions
+using a local LLM (Ollama), and lets you explore your spending through a modern web UI
+or CLI chat interface. All data stays on your machine.
 
 > [!WARNING]
 > This application processes sensitive financial data. **Run locally only** - do

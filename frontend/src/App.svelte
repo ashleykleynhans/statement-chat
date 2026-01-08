@@ -24,8 +24,8 @@
   <aside class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
     <!-- Logo -->
     <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-      <h1 class="text-xl font-bold text-gray-800 dark:text-gray-100">Statement Chat</h1>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Bank Statement Assistant</p>
+      <h1 class="text-xl font-bold text-gray-800 dark:text-gray-100">BankBot</h1>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Your local finance assistant</p>
     </div>
 
     <!-- Navigation -->

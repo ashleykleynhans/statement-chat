@@ -44,8 +44,8 @@ async def periodic_cleanup() -> None:
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
-        title="Statement Chat API",
-        description="API for querying bank statements with AI",
+        title="BankBot API",
+        description="API for querying bank statements with a local AI",
         version="0.1.0",
         lifespan=lifespan,
     )

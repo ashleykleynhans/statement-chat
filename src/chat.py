@@ -33,7 +33,7 @@ class ChatInterface:
     def start(self) -> None:
         """Start the interactive chat loop."""
         self.console.print(Panel(
-            "[bold green]Bank Statement Chat[/bold green]\n\n"
+            "[bold green]BankBot[/bold green]\n\n"
             "Ask questions about your transactions, e.g.:\n"
             "- When did I last pay the doctor?\n"
             "- How much did I spend on groceries last month?\n"
