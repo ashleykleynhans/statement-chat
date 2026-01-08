@@ -332,6 +332,21 @@ class TestTransactionsParsing:
         assert result.amount == -124.33
         assert result.balance == 14149.25
 
+    def test_parse_transactions_uses_statement_period_fallback(self, parser):
+        """Test year extraction falls back to Statement Period when Statement Date is missing."""
+        text = """
+        Statement Period : 1 November 2025 to 1 December 2025
+
+        Transactions in RAND
+        Date Description Amount Balance
+        15 Nov Some Payment 100.00 1,000.00Cr
+        """
+        transactions = parser._parse_transactions(text)
+
+        assert len(transactions) == 1
+        # Year should be 2025 from Statement Period's "to" date
+        assert transactions[0].date == "2025-11-15"
+
 
 class TestParseFile:
     """Tests for full PDF parsing."""

@@ -123,24 +123,28 @@ class FNBParser(BaseBankParser):
         in_transactions = False
         current_year = None
 
-        # Try to extract year and month from statement
-        year_match = re.search(r"Statement\s*(?:Date|Period).*?(\d{4})", text)
-        if year_match:
-            current_year = int(year_match.group(1))
-        else:
-            current_year = datetime.now().year
-
-        # Also extract statement month for year boundary handling
+        # Extract year and month from Statement Date (not Statement Period which may have different year)
+        # Statement Date format: "Statement Date : 2 January 2026"
         statement_month = None
-        month_match = re.search(r"Statement\s*Date\s*[:\s]+\d{1,2}\s+(\w+)\s+\d{4}", text, re.IGNORECASE)
-        if month_match:
+        current_year = None
+        date_match = re.search(r"Statement\s*Date\s*[:\s]+(\d{1,2})\s+(\w+)\s+(\d{4})", text, re.IGNORECASE)
+        if date_match:
+            current_year = int(date_match.group(3))
             try:
-                statement_month = datetime.strptime(month_match.group(1), "%B").month
+                statement_month = datetime.strptime(date_match.group(2), "%B").month
             except ValueError:
                 try:
-                    statement_month = datetime.strptime(month_match.group(1), "%b").month
+                    statement_month = datetime.strptime(date_match.group(2), "%b").month
                 except ValueError:
                     pass
+
+        # Fallback: try Statement Period if Statement Date not found
+        if current_year is None:
+            year_match = re.search(r"Statement\s*Period.*?to.*?(\d{4})", text)
+            if year_match:
+                current_year = int(year_match.group(1))
+            else:
+                current_year = datetime.now().year
 
         for line in lines:
             line = line.strip()
