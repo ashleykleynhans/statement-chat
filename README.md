@@ -4,6 +4,11 @@ A CLI application that parses PDF bank statements, imports them into SQLite,
 auto-classifies transactions using a local LLM (Ollama), and provides a chat
 interface to query your transaction history.
 
+> [!WARNING]
+> This application processes sensitive financial data. **Run locally only** - do
+> not deploy to cloud services or expose to the internet. Your bank statements
+> contain personal information that should never leave your machine.
+
 ## Features
 
 - **PDF Parsing**: Extract transactions from bank statement PDFs
