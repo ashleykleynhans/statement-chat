@@ -429,18 +429,49 @@ class TestLifespan:
     def test_lifespan_startup_shutdown(self):
         """Test lifespan context manager startup and shutdown."""
         import asyncio
-        from src.api.app import lifespan, create_app
+        from fastapi import FastAPI
 
-        app = create_app()
+        # Create a minimal app for testing
+        app = FastAPI()
+
+        # Save real create_task before patching
+        real_create_task = asyncio.create_task
 
         async def run_lifespan():
+            # Track task operations
+            task_created = False
+
+            # Create a real task that we control
+            async def dummy_task():
+                try:
+                    await asyncio.sleep(3600)
+                except asyncio.CancelledError:
+                    raise
+
+            real_task = None
+
+            def mock_create_task(coro):
+                nonlocal task_created, real_task
+                task_created = True
+                # Close the passed coroutine to avoid warnings
+                coro.close()
+                # Create our own controlled task using real function
+                real_task = real_create_task(dummy_task())
+                return real_task
+
+            # Patch at module level
             with patch('src.api.app.get_config') as mock_get_config, \
-                 patch('src.api.app.Database') as mock_db_class:
+                 patch('src.api.app.Database') as mock_db_class, \
+                 patch('src.api.app.asyncio.create_task', mock_create_task):
                 mock_get_config.return_value = {
                     "paths": {"database": "test.db"},
                     "ollama": {"host": "localhost", "port": 11434, "model": "llama3.2"},
                 }
-                mock_db_class.return_value = Mock()
+                mock_db = Mock()
+                mock_db_class.return_value = mock_db
+
+                # Import lifespan after patches are applied
+                from src.api.app import lifespan
 
                 # Use the lifespan context manager
                 async with lifespan(app):
@@ -448,15 +479,17 @@ class TestLifespan:
                     assert hasattr(app.state, 'config')
                     assert hasattr(app.state, 'db')
                     mock_db_class.assert_called_with("test.db")
+                    assert task_created
 
-                # After exiting, cleanup should have happened (task cancelled)
+                # After exiting, cleanup task should have been cancelled
+                assert real_task.cancelled() or real_task.done()
 
         asyncio.run(run_lifespan())
 
     def test_periodic_cleanup(self):
         """Test periodic cleanup function."""
         import asyncio
-        from src.api.app import periodic_cleanup
+        from src.api.session import session_manager
 
         async def run_cleanup():
             call_count = 0
@@ -467,14 +500,17 @@ class TestLifespan:
                 if call_count > 1:
                     raise asyncio.CancelledError()
 
-            with patch('src.api.app.session_manager') as mock_manager, \
+            # Patch session_manager's method directly
+            with patch.object(session_manager, 'cleanup_stale_sessions') as mock_cleanup, \
                  patch('src.api.app.asyncio.sleep', mock_sleep_fn):
+
+                from src.api.app import periodic_cleanup
 
                 with pytest.raises(asyncio.CancelledError):
                     await periodic_cleanup()
 
                 # cleanup_stale_sessions should have been called
-                mock_manager.cleanup_stale_sessions.assert_called_with(max_age_minutes=60)
+                mock_cleanup.assert_called_with(max_age_minutes=60)
 
         asyncio.run(run_cleanup())
 
