@@ -54,6 +54,14 @@ class Database:
                     ON transactions(category);
                 CREATE INDEX IF NOT EXISTS idx_transactions_type
                     ON transactions(transaction_type);
+
+                CREATE TABLE IF NOT EXISTS budgets (
+                    id INTEGER PRIMARY KEY,
+                    category TEXT UNIQUE NOT NULL,
+                    amount DECIMAL(10,2) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
             """)
 
             # Migration: Add statement_number column if missing (for existing databases)
@@ -275,3 +283,93 @@ class Database:
                 "SELECT COUNT(DISTINCT category) FROM transactions"
             ).fetchone()[0]
             return stats
+
+    def get_all_statements(self) -> list[dict]:
+        """Get all statements ordered by date descending."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT id, filename, account_number, statement_date, statement_number
+                   FROM statements
+                   ORDER BY statement_date DESC"""
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_latest_statement(self) -> dict | None:
+        """Get the most recent statement."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """SELECT id, filename, account_number, statement_date, statement_number
+                   FROM statements
+                   ORDER BY statement_date DESC
+                   LIMIT 1"""
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_transactions_by_statement(self, statement_number: str) -> list[dict]:
+        """Get all transactions for a specific statement."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT t.*, s.filename, s.account_number, s.statement_number
+                   FROM transactions t
+                   JOIN statements s ON t.statement_id = s.id
+                   WHERE s.statement_number = ?
+                   ORDER BY t.date DESC""",
+                (statement_number,)
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_category_summary_for_statement(self, statement_number: str) -> list[dict]:
+        """Get spending summary by category for a specific statement."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT category,
+                          COUNT(*) as count,
+                          SUM(CASE WHEN transaction_type = 'debit' THEN amount ELSE 0 END) as total_debits,
+                          SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE 0 END) as total_credits
+                   FROM transactions t
+                   JOIN statements s ON t.statement_id = s.id
+                   WHERE s.statement_number = ?
+                   GROUP BY category
+                   ORDER BY total_debits DESC""",
+                (statement_number,)
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def upsert_budget(self, category: str, amount: float) -> int:
+        """Insert or update a budget for a category."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """INSERT INTO budgets (category, amount, updated_at)
+                   VALUES (?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(category) DO UPDATE SET
+                       amount = excluded.amount,
+                       updated_at = CURRENT_TIMESTAMP""",
+                (category, amount)
+            )
+            return cursor.lastrowid
+
+    def get_all_budgets(self) -> list[dict]:
+        """Get all budget entries."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT id, category, amount FROM budgets ORDER BY category"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_budget_by_category(self, category: str) -> dict | None:
+        """Get budget for a specific category."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT id, category, amount FROM budgets WHERE category = ?",
+                (category,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def delete_budget(self, category: str) -> bool:
+        """Delete a budget by category. Returns True if deleted."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM budgets WHERE category = ?",
+                (category,)
+            )
+            return cursor.rowcount > 0

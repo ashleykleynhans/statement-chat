@@ -3,10 +3,14 @@
   import Chat from './components/Chat.svelte';
   import Dashboard from './components/Dashboard.svelte';
   import Transactions from './components/Transactions.svelte';
+  import Analytics from './components/Analytics.svelte';
+  import Budget from './components/Budget.svelte';
 
   const navItems = [
     { id: 'chat', label: 'Chat', icon: 'chat' },
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { id: 'analytics', label: 'Analytics', icon: 'chart' },
+    { id: 'budget', label: 'Budget', icon: 'budget' },
     { id: 'transactions', label: 'Transactions', icon: 'list' },
   ];
 
@@ -49,6 +53,15 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
+              {:else if item.icon === 'chart'}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                </svg>
+              {:else if item.icon === 'budget'}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               {/if}
               <span class="font-medium">{item.label}</span>
             </button>
@@ -69,6 +82,10 @@
       <Chat />
     {:else if $currentPage === 'dashboard'}
       <Dashboard />
+    {:else if $currentPage === 'analytics'}
+      <Analytics />
+    {:else if $currentPage === 'budget'}
+      <Budget />
     {:else if $currentPage === 'transactions'}
       <Transactions />
     {/if}

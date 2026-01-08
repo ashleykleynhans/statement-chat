@@ -11,6 +11,8 @@ interface to query your transaction history.
 - **Chat Interface**: Ask natural language questions about your spending
 - **REST + WebSocket API**: Integrate with frontend applications
 - **Web Frontend**: Svelte-based dashboard with chat, transactions, and analytics
+- **Analytics**: Pie charts showing spending breakdown per statement
+- **Budget Tracking**: Set monthly budgets per category and track actual vs budgeted spending
 - **File Watcher**: Automatically imports new statements when added
 - **Extensible**: Easy to add support for new banks
 
@@ -205,6 +207,13 @@ Start the API server with `python -m src.main serve`. Interactive docs available
 | GET | `/api/v1/transactions/category/{cat}` | Filter by category |
 | GET | `/api/v1/transactions/type/{type}` | Filter by debit/credit |
 | GET | `/api/v1/transactions/date-range?start=&end=` | Date range filter |
+| GET | `/api/v1/statements` | List all statements |
+| GET | `/api/v1/analytics/latest` | Analytics for latest statement |
+| GET | `/api/v1/analytics/statement/{num}` | Analytics for specific statement |
+| GET | `/api/v1/budgets` | List all budgets |
+| POST | `/api/v1/budgets` | Create/update budget |
+| DELETE | `/api/v1/budgets/{category}` | Delete a budget |
+| GET | `/api/v1/budgets/summary` | Budget vs actual comparison |
 
 ### WebSocket Chat
 
@@ -264,6 +273,8 @@ Then open http://localhost:5173 in your browser.
 
 - **Chat**: Real-time WebSocket chat with transaction context
 - **Dashboard**: Stats overview and spending by category chart
+- **Analytics**: Pie charts showing spending breakdown per statement with statement selector
+- **Budget**: Set budgets per category, track spending with progress bars (color-coded: green/yellow/red)
 - **Transactions**: Searchable, filterable transaction list with pagination
 
 ### Building for Production
@@ -281,7 +292,7 @@ The built files will be in `frontend/dist/`.
 statement-chat/
 ├── statements/           # Place PDF files here
 ├── data/
-│   └── statements.db    # SQLite database
+│   └── statements.db    # SQLite database (includes budgets table)
 ├── src/
 │   ├── main.py          # CLI entry point
 │   ├── database.py      # Database operations
@@ -293,7 +304,12 @@ statement-chat/
 │   │   ├── app.py       # FastAPI application
 │   │   ├── models.py    # Pydantic schemas
 │   │   ├── session.py   # WebSocket session management
-│   │   └── routers/     # API route handlers
+│   │   └── routers/
+│   │       ├── stats.py       # Stats and categories
+│   │       ├── transactions.py # Transaction queries
+│   │       ├── analytics.py   # Analytics endpoints
+│   │       ├── budgets.py     # Budget CRUD
+│   │       └── chat.py        # WebSocket chat
 │   └── parsers/
 │       ├── base.py      # Base parser class
 │       ├── fnb.py       # FNB parser
@@ -302,7 +318,14 @@ statement-chat/
 │   ├── src/
 │   │   ├── App.svelte   # Main app layout
 │   │   ├── lib/         # API client, WebSocket, stores
-│   │   └── components/  # UI components
+│   │   └── components/
+│   │       ├── Chat.svelte        # Chat interface
+│   │       ├── Dashboard.svelte   # Stats overview
+│   │       ├── Analytics.svelte   # Pie chart analytics
+│   │       ├── Budget.svelte      # Budget management
+│   │       ├── Transactions.svelte # Transaction list
+│   │       ├── PieChart.svelte    # Reusable pie chart
+│   │       └── CategoryChart.svelte # Bar chart
 │   ├── package.json
 │   └── vite.config.js
 ├── tests/                # Test suite

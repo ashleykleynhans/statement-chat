@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import get_config
 from ..database import Database
-from .routers import chat, stats, transactions
+from .routers import analytics, budgets, chat, stats, transactions
 from .session import session_manager
 
 
@@ -63,6 +63,8 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/ws", tags=["chat"])
     app.include_router(stats.router, prefix="/api/v1", tags=["stats"])
     app.include_router(transactions.router, prefix="/api/v1", tags=["transactions"])
+    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
+    app.include_router(budgets.router, prefix="/api/v1", tags=["budgets"])
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

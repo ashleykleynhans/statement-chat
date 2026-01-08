@@ -477,3 +477,198 @@ class TestLifespan:
                 mock_manager.cleanup_stale_sessions.assert_called_with(max_age_minutes=60)
 
         asyncio.run(run_cleanup())
+
+
+class TestAnalyticsEndpoints:
+    """Tests for analytics endpoints."""
+
+    def test_list_statements(self, client, mock_db, mock_config):
+        """Test listing all statements."""
+        mock_db.get_all_statements.return_value = [
+            {"id": 1, "statement_number": "287", "statement_date": "2025-12-01", "account_number": "12345"},
+            {"id": 2, "statement_number": "286", "statement_date": "2025-11-01", "account_number": "12345"},
+        ]
+
+        response = client.get("/api/v1/statements")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["statements"]) == 2
+        assert data["statements"][0]["statement_number"] == "287"
+
+    def test_get_latest_analytics(self, client, mock_db, mock_config):
+        """Test getting analytics for latest statement."""
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": "287", "statement_date": "2025-12-01"
+        }
+        mock_db.get_category_summary_for_statement.return_value = [
+            {"category": "groceries", "count": 10, "total_debits": 5000.00, "total_credits": 0.00},
+            {"category": "fuel", "count": 5, "total_debits": 2000.00, "total_credits": 0.00},
+        ]
+
+        response = client.get("/api/v1/analytics/latest")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["statement_number"] == "287"
+        assert data["total_debits"] == 7000.00
+        assert data["transaction_count"] == 15
+        assert len(data["categories"]) == 2
+
+    def test_get_latest_analytics_no_statements(self, client, mock_db, mock_config):
+        """Test getting analytics when no statements exist."""
+        mock_db.get_latest_statement.return_value = None
+
+        response = client.get("/api/v1/analytics/latest")
+
+        assert response.status_code == 404
+        assert "No statements found" in response.json()["detail"]
+
+    def test_get_latest_analytics_no_statement_number(self, client, mock_db, mock_config):
+        """Test getting analytics when latest statement has no statement number."""
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": None, "statement_date": "2025-12-01"
+        }
+
+        response = client.get("/api/v1/analytics/latest")
+
+        assert response.status_code == 404
+        assert "no statement number" in response.json()["detail"]
+
+    def test_get_analytics_by_statement(self, client, mock_db, mock_config):
+        """Test getting analytics for specific statement."""
+        mock_db.get_all_statements.return_value = [
+            {"id": 1, "statement_number": "287", "statement_date": "2025-12-01"}
+        ]
+        mock_db.get_category_summary_for_statement.return_value = [
+            {"category": "groceries", "count": 10, "total_debits": 5000.00, "total_credits": 0.00},
+        ]
+
+        response = client.get("/api/v1/analytics/statement/287")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["statement_number"] == "287"
+
+    def test_get_analytics_statement_not_found(self, client, mock_db, mock_config):
+        """Test getting analytics for non-existent statement."""
+        mock_db.get_all_statements.return_value = []
+
+        response = client.get("/api/v1/analytics/statement/999")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+
+class TestBudgetEndpoints:
+    """Tests for budget management endpoints."""
+
+    def test_list_budgets(self, client, mock_db, mock_config):
+        """Test listing all budgets."""
+        mock_db.get_all_budgets.return_value = [
+            {"id": 1, "category": "groceries", "amount": 10000.00},
+            {"id": 2, "category": "fuel", "amount": 5000.00},
+        ]
+
+        response = client.get("/api/v1/budgets")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["budgets"]) == 2
+
+    def test_create_budget(self, client, mock_db, mock_config):
+        """Test creating a budget."""
+        mock_db.upsert_budget.return_value = 1
+        mock_db.get_budget_by_category.return_value = {
+            "id": 1, "category": "groceries", "amount": 10000.00
+        }
+
+        response = client.post(
+            "/api/v1/budgets",
+            json={"category": "groceries", "amount": 10000.00}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["category"] == "groceries"
+        assert data["amount"] == 10000.00
+
+    def test_create_budget_negative_amount(self, client, mock_db, mock_config):
+        """Test creating budget with negative amount fails."""
+        response = client.post(
+            "/api/v1/budgets",
+            json={"category": "groceries", "amount": -100.00}
+        )
+
+        assert response.status_code == 400
+        assert "positive" in response.json()["detail"]
+
+    def test_create_budget_fetch_fails(self, client, mock_db, mock_config):
+        """Test creating budget when fetch after insert fails."""
+        mock_db.upsert_budget.return_value = 1
+        mock_db.get_budget_by_category.return_value = None  # Simulate fetch failure
+
+        response = client.post(
+            "/api/v1/budgets",
+            json={"category": "groceries", "amount": 10000.00}
+        )
+
+        assert response.status_code == 500
+        assert "Failed to create budget" in response.json()["detail"]
+
+    def test_delete_budget(self, client, mock_db, mock_config):
+        """Test deleting a budget."""
+        mock_db.delete_budget.return_value = True
+
+        response = client.delete("/api/v1/budgets/groceries")
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_delete_budget_not_found(self, client, mock_db, mock_config):
+        """Test deleting non-existent budget."""
+        mock_db.delete_budget.return_value = False
+
+        response = client.delete("/api/v1/budgets/nonexistent")
+
+        assert response.status_code == 404
+
+    def test_get_budget_summary(self, client, mock_db, mock_config):
+        """Test getting budget summary with actuals."""
+        mock_db.get_all_budgets.return_value = [
+            {"id": 1, "category": "groceries", "amount": 10000.00},
+            {"id": 2, "category": "fuel", "amount": 5000.00},
+        ]
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": "287"
+        }
+        mock_db.get_category_summary_for_statement.return_value = [
+            {"category": "groceries", "count": 10, "total_debits": 8000.00, "total_credits": 0.00},
+            {"category": "fuel", "count": 5, "total_debits": 6000.00, "total_credits": 0.00},
+        ]
+
+        response = client.get("/api/v1/budgets/summary")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_budgeted"] == 15000.00
+        assert data["total_spent"] == 14000.00
+        assert len(data["items"]) == 2
+        # Fuel should be first (120% > 80%)
+        assert data["items"][0]["category"] == "fuel"
+        assert data["items"][0]["percentage"] == 120.0
+
+    def test_get_budget_summary_no_statements(self, client, mock_db, mock_config):
+        """Test budget summary when no statements exist."""
+        mock_db.get_all_budgets.return_value = [
+            {"id": 1, "category": "groceries", "amount": 10000.00},
+        ]
+        mock_db.get_latest_statement.return_value = None
+
+        response = client.get("/api/v1/budgets/summary")
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should show 0 actual spending
+        assert data["items"][0]["actual"] == 0
+        assert data["items"][0]["percentage"] == 0

@@ -260,3 +260,106 @@ class TestAggregations:
         assert stats["total_debits"] == 1300.00
         assert stats["total_credits"] == 10000.00
         assert stats["categories_count"] == 3
+
+
+class TestStatementQueries:
+    """Tests for statement query methods."""
+
+    def test_get_all_statements(self, db_with_data):
+        """Test getting all statements."""
+        statements = db_with_data.get_all_statements()
+        assert len(statements) == 1
+        assert statements[0]["account_number"] == "12345678901"
+
+    def test_get_latest_statement(self, db_with_data):
+        """Test getting latest statement."""
+        latest = db_with_data.get_latest_statement()
+        assert latest is not None
+        assert latest["account_number"] == "12345678901"
+
+    def test_get_latest_statement_empty(self, db):
+        """Test getting latest statement when empty."""
+        latest = db.get_latest_statement()
+        assert latest is None
+
+    def test_get_transactions_by_statement(self, db):
+        """Test getting transactions by statement number."""
+        stmt_id = db.insert_statement("test.pdf", statement_number="287")
+        db.insert_transaction(stmt_id, "2025-01-15", "Test", 100.00)
+
+        transactions = db.get_transactions_by_statement("287")
+        assert len(transactions) == 1
+
+    def test_get_category_summary_for_statement(self, db):
+        """Test getting category summary for specific statement."""
+        stmt_id = db.insert_statement("test.pdf", statement_number="287")
+        db.insert_transaction(
+            stmt_id, "2025-01-15", "Groceries", 500.00,
+            transaction_type="debit", category="groceries"
+        )
+        db.insert_transaction(
+            stmt_id, "2025-01-16", "Fuel", 300.00,
+            transaction_type="debit", category="fuel"
+        )
+
+        summary = db.get_category_summary_for_statement("287")
+        assert len(summary) == 2
+
+
+class TestBudgetOperations:
+    """Tests for budget CRUD operations."""
+
+    def test_upsert_budget_insert(self, db):
+        """Test inserting a new budget."""
+        budget_id = db.upsert_budget("groceries", 10000.00)
+        assert budget_id is not None
+
+        budgets = db.get_all_budgets()
+        assert len(budgets) == 1
+        assert budgets[0]["category"] == "groceries"
+        assert budgets[0]["amount"] == 10000.00
+
+    def test_upsert_budget_update(self, db):
+        """Test updating an existing budget."""
+        db.upsert_budget("groceries", 10000.00)
+        db.upsert_budget("groceries", 15000.00)
+
+        budgets = db.get_all_budgets()
+        assert len(budgets) == 1
+        assert budgets[0]["amount"] == 15000.00
+
+    def test_get_all_budgets(self, db):
+        """Test getting all budgets."""
+        db.upsert_budget("groceries", 10000.00)
+        db.upsert_budget("fuel", 5000.00)
+
+        budgets = db.get_all_budgets()
+        assert len(budgets) == 2
+
+    def test_get_budget_by_category(self, db):
+        """Test getting budget by category."""
+        db.upsert_budget("groceries", 10000.00)
+
+        budget = db.get_budget_by_category("groceries")
+        assert budget is not None
+        assert budget["amount"] == 10000.00
+
+    def test_get_budget_by_category_not_found(self, db):
+        """Test getting non-existent budget."""
+        budget = db.get_budget_by_category("nonexistent")
+        assert budget is None
+
+    def test_delete_budget(self, db):
+        """Test deleting a budget."""
+        db.upsert_budget("groceries", 10000.00)
+
+        deleted = db.delete_budget("groceries")
+        assert deleted is True
+
+        budgets = db.get_all_budgets()
+        assert len(budgets) == 0
+
+    def test_delete_budget_not_found(self, db):
+        """Test deleting non-existent budget."""
+        deleted = db.delete_budget("nonexistent")
+        assert deleted is False
