@@ -21,10 +21,16 @@ or CLI chat interface. All data stays on your machine.
 - **File Watcher**: Automatically imports new statements when added
 - **Extensible**: Easy to add support for new banks
 
+## Tech Stack
+
+- **Backend**: Python 3.11+ (FastAPI, SQLite)
+- **Frontend**: Svelte 5, Tailwind CSS
+- **AI**: [Ollama](https://ollama.ai/) (local LLM)
+
 ## Requirements
 
 - Python 3.11+
-- Node.js 18+ (for frontend)
+- Node.js 18+
 - [Ollama](https://ollama.ai/) running locally
 
 ## Installation
