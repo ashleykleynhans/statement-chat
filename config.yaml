@@ -225,6 +225,7 @@ classification_rules:
   "Spur": restaurants
 
   # Reversals
+  "#Rev Ewa": reversal          # Reversal of ewallet fee
   "Magtape Unpaid": reversal
   "Send Reversal": reversal
 
