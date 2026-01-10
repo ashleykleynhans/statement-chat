@@ -678,13 +678,16 @@ class TestBudgetQueries:
     """Tests for budget-related query handling."""
 
     def test_budget_query_filters_to_latest_statement(self, mock_db):
-        """Test budget queries filter transactions to latest statement only."""
+        """Test budget queries with category filter to latest statement."""
+        mock_db.get_all_categories.return_value = ["groceries", "fuel", "electricity"]
         mock_db.get_latest_statement.return_value = {
             "id": 1, "statement_number": "287", "statement_date": "2025-12-01"
         }
         mock_db.get_transactions_by_statement.return_value = [
             {"date": "2025-12-15", "description": "Electricity", "amount": 2000,
-             "category": "utilities", "transaction_type": "debit"}
+             "category": "electricity", "transaction_type": "debit"},
+            {"date": "2025-12-16", "description": "Groceries", "amount": 500,
+             "category": "groceries", "transaction_type": "debit"}
         ]
 
         with patch('src.chat.ollama.Client'):
@@ -693,7 +696,22 @@ class TestBudgetQueries:
 
             mock_db.get_latest_statement.assert_called()
             mock_db.get_transactions_by_statement.assert_called_with("287")
+            # Should only return electricity transactions
             assert len(result) == 1
+            assert result[0]["category"] == "electricity"
+
+    def test_general_budget_query_returns_no_transactions(self, mock_db):
+        """Test general budget queries return no transactions."""
+        mock_db.get_latest_statement.return_value = {
+            "id": 1, "statement_number": "287", "statement_date": "2025-12-01"
+        }
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            result = chat._find_relevant_transactions("How much budget remaining?")
+
+            # Should return empty list for general budget queries
+            assert result == []
 
     def test_budget_query_with_category_filters_both(self, mock_db):
         """Test budget query with category filters to latest statement AND category."""

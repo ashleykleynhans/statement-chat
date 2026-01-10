@@ -6,6 +6,51 @@
   let showTransactions = false;
 
   $: hasTransactions = message.transactions?.length > 0;
+
+  // Format message content with colors for budget info
+  function formatContent(content) {
+    if (!content) return '';
+
+    // Escape HTML first
+    let formatted = content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Color "OVER BUDGET" in red
+    formatted = formatted.replace(
+      /OVER BUDGET/g,
+      '<span class="text-red-500 font-semibold">OVER BUDGET</span>'
+    );
+
+    // Color percentages based on value
+    formatted = formatted.replace(
+      /(\d+)% used/g,
+      (match, pct) => {
+        const percent = parseInt(pct);
+        let colorClass = 'text-green-500';
+        if (percent >= 100) colorClass = 'text-red-500';
+        else if (percent >= 80) colorClass = 'text-yellow-500';
+        return `<span class="${colorClass}">${pct}% used</span>`;
+      }
+    );
+
+    // Color "remaining" amounts in green
+    formatted = formatted.replace(
+      /(R[\d,\.]+)\s+remaining/g,
+      '<span class="text-green-500">$1 remaining</span>'
+    );
+
+    // Color "over budget by" amounts in red
+    formatted = formatted.replace(
+      /by (R[\d,\.]+)/g,
+      'by <span class="text-red-500 font-semibold">$1</span>'
+    );
+
+    return formatted;
+  }
+
+  $: formattedContent = formatContent(message.content);
 </script>
 
 <div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4">
@@ -17,7 +62,7 @@
         : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow'}"
   >
     <!-- Message content -->
-    <div class="whitespace-pre-wrap">{message.content}</div>
+    <div class="whitespace-pre-wrap">{@html formattedContent}</div>
 
     <!-- Transactions (for assistant messages) -->
     {#if hasTransactions}

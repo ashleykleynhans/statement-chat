@@ -164,10 +164,12 @@ class ChatInterface:
             latest_stmt = self.db.get_latest_statement()
             if latest_stmt and latest_stmt.get("statement_number"):
                 stmt_num = latest_stmt["statement_number"]
-                stmt_transactions = self.db.get_transactions_by_statement(stmt_num)
                 if matched_category:
+                    # Specific category budget - show those transactions
+                    stmt_transactions = self.db.get_transactions_by_statement(stmt_num)
                     return [tx for tx in stmt_transactions if tx.get("category") == matched_category]
-                return stmt_transactions
+                # General budget question - don't show transactions
+                return []
 
         # If we have both date range and category, filter by both
         if date_start and date_end and matched_category:
@@ -222,19 +224,23 @@ class ChatInterface:
 
     def _build_context(self, transactions: list[dict], query: str) -> str:
         """Build context string for LLM from transactions."""
-        if not transactions:
-            return "No matching transactions found in the database."
-
         stats = self.db.get_stats()
         query_lower = query.lower()
+        is_budget_query = "budget" in query_lower
+
+        # For non-budget queries with no transactions, return early
+        if not transactions and not is_budget_query:
+            return "No matching transactions found in the database."
 
         context_parts = [
             f"Database contains {stats['total_transactions']} transactions.",
-            f"Found {len(transactions)} potentially relevant transactions.",
         ]
 
+        if transactions:
+            context_parts.append(f"Found {len(transactions)} potentially relevant transactions.")
+
         # If query is about budget, include budget info
-        if "budget" in query_lower:
+        if is_budget_query:
             budgets = self.db.get_all_budgets()
             latest_stmt = self.db.get_latest_statement()
 
@@ -271,35 +277,37 @@ class ChatInterface:
                         f"R{total_spent:.2f} spent, R{total_remaining:.2f} remaining"
                     )
 
-        context_parts.append("\nRelevant transactions:")
+        # Only include transactions section if there are transactions
+        if transactions:
+            context_parts.append("\nRelevant transactions:")
 
-        # Limit to most relevant transactions for context
-        total_debits = 0.0
-        total_credits = 0.0
-        for tx in transactions[:15]:
-            date = tx.get("date", "Unknown")
-            desc = tx.get("description", "")[:50]
-            amount = tx.get("amount", 0)
-            category = tx.get("category", "uncategorized")
-            tx_type = tx.get("transaction_type", "unknown")
-            recipient = tx.get("recipient_or_payer", "")
+            # Limit to most relevant transactions for context
+            total_debits = 0.0
+            total_credits = 0.0
+            for tx in transactions[:15]:
+                date = tx.get("date", "Unknown")
+                desc = tx.get("description", "")[:50]
+                amount = tx.get("amount", 0)
+                category = tx.get("category", "uncategorized")
+                tx_type = tx.get("transaction_type", "unknown")
+                recipient = tx.get("recipient_or_payer", "")
 
-            if tx_type == "debit":
-                total_debits += abs(amount)
-            else:
-                total_credits += abs(amount)
+                if tx_type == "debit":
+                    total_debits += abs(amount)
+                else:
+                    total_credits += abs(amount)
 
-            line = f"- {date}: {desc}"
-            if recipient:
-                line += f" ({recipient})"
-            line += f" | R{abs(amount):.2f} {tx_type} | {category}"
-            context_parts.append(line)
+                line = f"- {date}: {desc}"
+                if recipient:
+                    line += f" ({recipient})"
+                line += f" | R{abs(amount):.2f} {tx_type} | {category}"
+                context_parts.append(line)
 
-        if len(transactions) > 15:
-            context_parts.append(f"\n... and {len(transactions) - 15} more transactions")
+            if len(transactions) > 15:
+                context_parts.append(f"\n... and {len(transactions) - 15} more transactions")
 
-        # Provide pre-calculated totals
-        context_parts.append(f"\nTOTAL of above transactions: R{total_debits:.2f} spent (debits), R{total_credits:.2f} received (credits)")
+            # Provide pre-calculated totals
+            context_parts.append(f"\nTOTAL of above transactions: R{total_debits:.2f} spent (debits), R{total_credits:.2f} received (credits)")
 
         return "\n".join(context_parts)
 
@@ -326,9 +334,11 @@ When answering questions about spending or transactions:
 - Never just give a total without listing the individual transactions
 
 For budget questions:
-- If asked about a specific category, report that category's budget status
+- If asked about a specific category, report that category's budget status from the context
+- If the category is NOT listed in the budget status, say "No budget has been set for [category]"
 - If asked about overall/total budget, list ALL categories with their status, then show the OVERALL BUDGET TOTAL
 - Each category has its own separate budget - don't mix them
+- Only report budget information that is explicitly provided in the context - never make up budget amounts
 
 "Saved" or "savings" refers to transactions in the "savings" category (transfers to savings/investments), not credits received.
 
