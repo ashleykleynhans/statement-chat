@@ -355,13 +355,13 @@ When answering questions about spending or transactions:
 - Never just give a total without listing the individual transactions
 
 For budget questions:
-- If asked about a specific category, ALWAYS include: budget amount, amount spent, amount remaining, percentage used, and whether over budget
-- Required format for category budget: "Your medical budget is R10,000.00. You've spent R8,615.00 (86% used), with R1,385.00 remaining."
+- CRITICAL: Use ONLY the exact budget amounts from the context. NEVER make up or guess budget amounts.
+- If asked about a specific category, ALWAYS include: budget amount, amount spent, amount remaining, percentage used
+- Format: "Your [category] budget is R[budget_amount]. You've spent R[spent] ([X]% used), with R[remaining] remaining."
 - If the category is NOT listed in the budget status, say "No budget has been set for [category]"
 - If asked about overall/total budget, list ALL categories with their status, then show the OVERALL BUDGET TOTAL
 - Each category has its own separate budget - don't mix them
-- Only report budget information that is explicitly provided in the context - never make up budget amounts
-- If over budget, highlight this: "You are OVER BUDGET by R500.00"
+- If over budget, say: "You are OVER BUDGET by R[amount]"
 
 "Saved" or "savings" refers to transactions in the "savings" category (transfers to savings/investments), not credits received.
 
