@@ -133,12 +133,21 @@ class TestFindRelevantTransactions:
         mock_db.search_transactions.assert_called()
 
     def test_falls_back_to_recent(self, chat, mock_db):
-        """Test falling back to recent transactions."""
+        """Test falling back to recent transactions for vague queries."""
         mock_db.search_transactions.return_value = []
 
-        chat._find_relevant_transactions("random query")
+        chat._find_relevant_transactions("show recent transactions")
 
         mock_db.get_all_transactions.assert_called_with(limit=20)
+
+    def test_specific_query_no_fallback(self, chat, mock_db):
+        """Test specific queries don't fallback to recent transactions."""
+        mock_db.search_transactions.return_value = []
+
+        result = chat._find_relevant_transactions("flowers for fiancé")
+
+        mock_db.get_all_transactions.assert_not_called()
+        assert result == []
 
     def test_find_category_with_date_range(self, chat, mock_db):
         """Test finding category transactions within a date range."""
@@ -543,28 +552,30 @@ class TestFindRelevantTransactionsExtended:
     def test_find_debit_keyword_falls_through(self, mock_db):
         """Test debit/expense/payment keywords don't return all debits."""
         mock_db.search_transactions.return_value = []
-        mock_db.get_all_transactions.return_value = []
 
         with patch('src.chat.ollama.Client'):
             chat = ChatInterface(mock_db)
             # These keywords should NOT trigger get_transactions_by_type
-            # but should fall through to search
-            chat._find_relevant_transactions("show my expenses")
+            # but should fall through to search, then return empty (no fallback)
+            result = chat._find_relevant_transactions("show my expenses")
 
             # Should NOT have called get_transactions_by_type for debits
             # (because returning all debits is too many)
-            mock_db.get_all_transactions.assert_called()
+            # Also should not fallback since this is a specific query
+            mock_db.get_all_transactions.assert_not_called()
+            assert result == []
 
     def test_find_payment_keyword_falls_through(self, mock_db):
-        """Test payment keyword falls through to search."""
+        """Test payment keyword falls through to search, no fallback."""
         mock_db.search_transactions.return_value = []
-        mock_db.get_all_transactions.return_value = []
 
         with patch('src.chat.ollama.Client'):
             chat = ChatInterface(mock_db)
-            chat._find_relevant_transactions("show payment history")
+            result = chat._find_relevant_transactions("show payment history")
 
-            mock_db.get_all_transactions.assert_called()
+            # Specific query - no fallback to recent transactions
+            mock_db.get_all_transactions.assert_not_called()
+            assert result == []
 
 
 class TestFollowUpDetection:
@@ -674,8 +685,7 @@ class TestFollowUpContext:
             assert chat._last_transactions == groceries
 
     def test_empty_previous_transactions_fetches_new(self, mock_db):
-        """Test follow-up with no previous transactions fetches new."""
-        mock_db.get_all_transactions.return_value = []
+        """Test follow-up with no previous transactions tries to fetch new."""
         mock_db.search_transactions.return_value = []
 
         with patch('src.chat.ollama.Client'):
@@ -683,8 +693,9 @@ class TestFollowUpContext:
             chat._client.chat.return_value = {"message": {"content": "Response"}}
             chat._last_transactions = []  # Empty
 
-            # Even though it looks like follow-up, should fetch new
-            chat._process_query("group them")
+            # Even though it looks like follow-up, should try to fetch new
+            # Use vague query that triggers fallback
+            chat._process_query("show recent transactions")
 
             mock_db.get_all_transactions.assert_called()
 
