@@ -81,6 +81,13 @@ export async function getTransactionsByDateRange(start, end) {
 }
 
 /**
+ * Get transactions by statement number.
+ */
+export async function getTransactionsByStatement(statementNumber) {
+  return fetchJSON(`${BASE_URL}/transactions/statement/${encodeURIComponent(statementNumber)}`);
+}
+
+/**
  * Health check.
  */
 export async function healthCheck() {

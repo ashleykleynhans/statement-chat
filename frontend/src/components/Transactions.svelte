@@ -5,6 +5,9 @@
     searchTransactions,
     getCategories,
     getTransactionsByCategory,
+    getTransactionsByDateRange,
+    getTransactionsByStatement,
+    getStatements,
   } from '../lib/api.js';
   import { formatCurrency, formatDate, filterCategory, filterSource, currentPage } from '../lib/stores.js';
 
@@ -84,6 +87,26 @@
   let categories = [];
   let selectedCategory = '';
 
+  let statements = [];
+  let selectedStatement = '';
+  let selectedYear = '';
+  let selectedMonth = '';
+
+  // Generate available years and months from statements
+  $: availableYears = [...new Set(statements.map(s => {
+    const date = s.statement_date || '';
+    return date.substring(0, 4);
+  }).filter(y => y))].sort().reverse();
+
+  $: availableMonths = selectedYear
+    ? [...new Set(statements
+        .filter(s => (s.statement_date || '').startsWith(selectedYear))
+        .map(s => (s.statement_date || '').substring(5, 7))
+      )].sort()
+    : [];
+
+  const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
   const PAGE_SIZE = 20;
   let pageNum = 0;
 
@@ -92,7 +115,7 @@
   $: canGoForward = pageNum < totalPages - 1;
 
   onMount(async () => {
-    await loadCategories();
+    await Promise.all([loadCategories(), loadStatements()]);
 
     // Check if there's a filter from Dashboard navigation
     const initialFilter = $filterCategory;
@@ -104,6 +127,15 @@
       await loadTransactions();
     }
   });
+
+  async function loadStatements() {
+    try {
+      const result = await getStatements();
+      statements = result.statements || [];
+    } catch (err) {
+      console.error('Failed to load statements:', err);
+    }
+  }
 
   async function loadTransactions() {
     loading = true;
@@ -181,21 +213,122 @@
   function filterByCategory(category) {
     if (category) {
       selectedCategory = category;
+      selectedStatement = '';
+      selectedYear = '';
+      selectedMonth = '';
       filterSource.set('transactions');
       handleCategoryChange();
+    }
+  }
+
+  function filterByStatement(statementNumber) {
+    if (statementNumber) {
+      selectedStatement = statementNumber;
+      selectedCategory = '';
+      selectedYear = '';
+      selectedMonth = '';
+      searchQuery = '';
+      filterSource.set('transactions');
+      handleStatementChange();
+    }
+  }
+
+  async function handleStatementChange() {
+    searchQuery = '';
+    selectedCategory = '';
+    selectedYear = '';
+    selectedMonth = '';
+    pageNum = 0;
+
+    if (!selectedStatement) {
+      await loadTransactions();
+      return;
+    }
+
+    loading = true;
+    error = null;
+    try {
+      const result = await getTransactionsByStatement(selectedStatement);
+      transactions = result.transactions;
+      total = result.count;
+    } catch (err) {
+      error = err.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleYearChange() {
+    selectedMonth = '';
+    selectedStatement = '';
+    selectedCategory = '';
+    searchQuery = '';
+    pageNum = 0;
+
+    if (!selectedYear) {
+      await loadTransactions();
+      return;
+    }
+
+    // Filter by full year
+    loading = true;
+    error = null;
+    try {
+      const start = `${selectedYear}-01-01`;
+      const end = `${selectedYear}-12-31`;
+      const result = await getTransactionsByDateRange(start, end);
+      transactions = result.transactions;
+      total = result.count;
+    } catch (err) {
+      error = err.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleMonthChange() {
+    selectedStatement = '';
+    selectedCategory = '';
+    searchQuery = '';
+    pageNum = 0;
+
+    if (!selectedMonth || !selectedYear) {
+      return;
+    }
+
+    loading = true;
+    error = null;
+    try {
+      const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
+      const start = `${selectedYear}-${selectedMonth}-01`;
+      const end = `${selectedYear}-${selectedMonth}-${lastDay.toString().padStart(2, '0')}`;
+      const result = await getTransactionsByDateRange(start, end);
+      transactions = result.transactions;
+      total = result.count;
+    } catch (err) {
+      error = err.message;
+    } finally {
+      loading = false;
     }
   }
 
   function clearFilter() {
     const source = $filterSource;
     selectedCategory = '';
+    selectedStatement = '';
+    selectedYear = '';
+    selectedMonth = '';
     filterSource.set('');
 
     if (source && source !== 'transactions') {
       currentPage.set(source);
     } else {
-      handleCategoryChange();
+      loadTransactions();
     }
+  }
+
+  function hasActiveFilter() {
+    return selectedCategory || selectedStatement || selectedYear;
   }
 
   async function goToPage(page) {
@@ -211,45 +344,112 @@
   <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Transactions</h1>
 
   <!-- Filters -->
-  <div class="flex flex-col sm:flex-row gap-4 mb-6">
-    <!-- Search -->
-    <div class="flex-1">
-      <input
-        type="text"
-        bind:value={searchQuery}
-        on:input={handleSearchInput}
-        placeholder="Search transactions..."
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+  <div class="flex flex-col gap-4 mb-6">
+    <!-- Row 1: Search and Category -->
+    <div class="flex flex-col sm:flex-row gap-4">
+      <!-- Search -->
+      <div class="flex-1">
+        <input
+          type="text"
+          bind:value={searchQuery}
+          on:input={handleSearchInput}
+          placeholder="Search transactions..."
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <!-- Category filter -->
+      <select
+        bind:value={selectedCategory}
+        on:change={handleCategoryChange}
+        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">All Categories</option>
+        {#each categories as category}
+          <option value={category}>{formatCategoryName(category)}</option>
+        {/each}
+      </select>
     </div>
 
-    <!-- Category filter -->
-    <select
-      bind:value={selectedCategory}
-      on:change={handleCategoryChange}
-      class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <option value="">All Categories</option>
-      {#each categories as category}
-        <option value={category}>{category}</option>
-      {/each}
-    </select>
+    <!-- Row 2: Year, Month, Statement filters -->
+    <div class="flex flex-col sm:flex-row gap-4">
+      <!-- Year filter -->
+      <select
+        bind:value={selectedYear}
+        on:change={handleYearChange}
+        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">All Years</option>
+        {#each availableYears as year}
+          <option value={year}>{year}</option>
+        {/each}
+      </select>
+
+      <!-- Month filter -->
+      <select
+        bind:value={selectedMonth}
+        on:change={handleMonthChange}
+        disabled={!selectedYear}
+        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+      >
+        <option value="">All Months</option>
+        {#each availableMonths as month}
+          <option value={month}>{monthNames[parseInt(month)]}</option>
+        {/each}
+      </select>
+
+      <!-- Statement filter -->
+      <select
+        bind:value={selectedStatement}
+        on:change={handleStatementChange}
+        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">All Statements</option>
+        {#each statements as stmt}
+          <option value={stmt.statement_number}>#{stmt.statement_number} ({stmt.statement_date || 'Unknown'})</option>
+        {/each}
+      </select>
+    </div>
   </div>
 
   <!-- Active filter indicator -->
-  {#if selectedCategory}
-    <div class="flex items-center gap-2 mb-4">
+  {#if hasActiveFilter()}
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
       <span class="text-sm text-gray-500 dark:text-gray-400">Filtered by:</span>
-      <button
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white cursor-pointer transition-all hover:scale-105"
-        style="background: {getCategoryStyle(selectedCategory).background}; box-shadow: {getCategoryStyle(selectedCategory).boxShadow};"
-        on:click={clearFilter}
-      >
-        {formatCategoryName(selectedCategory)}
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      {#if selectedCategory}
+        <button
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white cursor-pointer transition-all hover:scale-105"
+          style="background: {getCategoryStyle(selectedCategory).background}; box-shadow: {getCategoryStyle(selectedCategory).boxShadow};"
+          on:click={clearFilter}
+        >
+          {formatCategoryName(selectedCategory)}
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      {/if}
+      {#if selectedStatement}
+        <button
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white cursor-pointer transition-all hover:scale-105 bg-indigo-600"
+          on:click={clearFilter}
+        >
+          Statement #{selectedStatement}
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      {/if}
+      {#if selectedYear}
+        <button
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white cursor-pointer transition-all hover:scale-105 bg-emerald-600"
+          on:click={clearFilter}
+        >
+          {selectedYear}{selectedMonth ? ` ${monthNames[parseInt(selectedMonth)]}` : ''}
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      {/if}
     </div>
   {/if}
 
@@ -296,8 +496,18 @@
                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   {formatDate(tx.date)}
                 </td>
-                <td class="px-4 py-3 text-sm text-center text-gray-500 dark:text-gray-500 whitespace-nowrap">
-                  {tx.statement_number || '-'}
+                <td class="px-4 py-3 text-sm text-center whitespace-nowrap">
+                  {#if tx.statement_number}
+                    <button
+                      class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                      on:click={() => filterByStatement(tx.statement_number)}
+                      title="View all transactions from statement #{tx.statement_number}"
+                    >
+                      #{tx.statement_number}
+                    </button>
+                  {:else}
+                    <span class="text-gray-500 dark:text-gray-500">-</span>
+                  {/if}
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                   {tx.description}
@@ -329,7 +539,7 @@
     </div>
 
     <!-- Pagination -->
-    {#if totalPages > 1 && !searchQuery && !selectedCategory}
+    {#if totalPages > 1 && !searchQuery && !hasActiveFilter()}
       <div class="flex items-center justify-between mt-4">
         <button
           on:click={() => goToPage(pageNum - 1)}

@@ -73,3 +73,11 @@ async def get_by_date_range(
     db = request.app.state.db
     results = db.get_transactions_in_date_range(start.isoformat(), end.isoformat())
     return {"transactions": results, "count": len(results)}
+
+
+@router.get("/transactions/statement/{statement_number}")
+async def get_by_statement(request: Request, statement_number: str) -> dict:
+    """Get all transactions for a specific statement."""
+    db = request.app.state.db
+    results = db.get_transactions_by_statement(statement_number)
+    return {"transactions": results, "count": len(results)}

@@ -194,6 +194,17 @@ class TestTransactionEndpoints:
         assert response.status_code == 400
         assert "before" in response.json()["detail"]
 
+    def test_get_by_statement(self, client, mock_db):
+        """Test filtering by statement number."""
+        mock_db.get_transactions_by_statement.return_value = [
+            {"id": 1, "description": "Test", "amount": 100}
+        ]
+        response = client.get("/api/v1/transactions/statement/123")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 1
+        mock_db.get_transactions_by_statement.assert_called_with("123")
+
 
 class TestSessionManager:
     """Tests for session management."""
