@@ -109,7 +109,7 @@ class ChatInterface:
 
         # If query has no specific transaction keywords, might be follow-up
         has_specific_keywords = any(word in query_lower for word in [
-            "show", "find", "search", "electricity", "groceries", "fuel",
+            "show", "find", "search", "list", "electricity", "groceries", "fuel",
             "medical", "salary", "deposit", "last month", "this month",
             "budget", "saved", "savings", "spent", "spend", "remaining"
         ])
@@ -220,9 +220,13 @@ class ChatInterface:
             if results:
                 return results
 
-        # Only fall back to recent transactions for vague queries
-        vague_queries = ["recent", "latest", "transactions", "show all", "list all"]
-        if any(v in query_lower for v in vague_queries):
+        # Only fall back to recent transactions for purely vague queries
+        # Check if query only contains vague/generic words
+        vague_words = {"recent", "latest", "transactions", "transaction", "all", "my", "show", "list", "get"}
+        query_words = set(re.findall(r"\b\w+\b", query_lower))
+        is_purely_vague = query_words.issubset(vague_words)
+
+        if is_purely_vague:
             return self.db.get_all_transactions(limit=20)
 
         # No matches found for specific query - return empty
