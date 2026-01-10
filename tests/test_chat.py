@@ -82,6 +82,12 @@ class TestSearchTermExtraction:
 class TestFindRelevantTransactions:
     """Tests for finding relevant transactions."""
 
+    def test_greeting_returns_empty(self, chat, mock_db):
+        """Test greetings return no transactions."""
+        result = chat._find_relevant_transactions("hello")
+        assert result == []
+        mock_db.get_all_transactions.assert_not_called()
+
     def test_find_by_category(self, chat, mock_db):
         """Test finding transactions by category keyword."""
         mock_db.get_transactions_by_category.return_value = [

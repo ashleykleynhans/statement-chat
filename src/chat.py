@@ -132,6 +132,13 @@ class ChatInterface:
         """Find transactions relevant to the user's query."""
         query_lower = query.lower()
 
+        # Don't return transactions for greetings
+        words = set(query_lower.split())
+        is_greeting = (words & {"hi", "hello", "hey", "howdy", "greetings", "thanks"} or
+                       any(g in query_lower for g in ["good morning", "good afternoon", "good evening", "thank you"]))
+        if is_greeting and len(query.split()) <= 5:
+            return []
+
         # First, determine date range if specified
         date_start = None
         date_end = None
