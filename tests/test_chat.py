@@ -327,6 +327,33 @@ class TestAskMethod:
 
             assert "500" in result
 
+    def test_ask_follow_up_uses_previous_transactions(self, mock_db):
+        """Test ask method uses previous transactions for follow-up queries."""
+        mock_db.get_transactions_by_category.return_value = [
+            {"date": "2025-01-15", "description": "Woolworths", "amount": 500,
+             "category": "groceries", "transaction_type": "debit"}
+        ]
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            chat._client.chat.return_value = {
+                "message": {"content": "Response"}
+            }
+
+            # First query - should fetch transactions
+            chat.ask("show groceries")
+            assert len(chat._last_transactions) == 1
+
+            # Reset mock to verify it's not called again
+            mock_db.get_transactions_by_category.reset_mock()
+
+            # Follow-up query - should use previous transactions
+            chat.ask("list them")
+
+            # Should NOT have fetched new transactions
+            mock_db.get_transactions_by_category.assert_not_called()
+            mock_db.search_transactions.assert_not_called()
+
 
 class TestChatStart:
     """Tests for chat start method."""

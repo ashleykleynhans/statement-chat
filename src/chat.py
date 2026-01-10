@@ -98,7 +98,7 @@ class ChatInterface:
         # Pronouns/references that indicate follow-up
         follow_up_indicators = {
             "them", "these", "those", "it", "they",
-            "above", "previous", "that",
+            "above", "previous", "that", "list",
             "group", "sort", "filter", "summarize", "total",
             "sum", "average", "breakdown", "analyze"
         }
@@ -316,13 +316,14 @@ Always address the user as "you"/"your", never "the user".
 
 For greetings (hi, hello, hey, etc.), respond with a friendly greeting and offer to help with their transactions. Don't list transaction data for greetings.
 
-When listing spending or transactions:
-- List each transaction with its date and amount
+When answering questions about spending or transactions:
+- ALWAYS list each individual transaction with its date and amount
 - Use the pre-calculated TOTAL provided in the context - never calculate totals yourself
-- Example format:
+- Required format:
   "You spent R27,030.98 on ceiling repairs:
   - 15 Jan 2024: R9,460.84
   - 20 Feb 2024: R17,570.14"
+- Never just give a total without listing the individual transactions
 
 For budget questions:
 - If asked about a specific category, report that category's budget status
@@ -398,6 +399,12 @@ Answer concisely and directly."""
 
     def ask(self, query: str) -> str:
         """Single query method for non-interactive use."""
-        relevant_transactions = self._find_relevant_transactions(query)
+        # Check if this is a follow-up query about previous transactions
+        if self._is_follow_up_query(query) and self._last_transactions:
+            relevant_transactions = self._last_transactions
+        else:
+            relevant_transactions = self._find_relevant_transactions(query)
+            self._last_transactions = relevant_transactions
+
         context = self._build_context(relevant_transactions, query)
         return self._get_llm_response(query, context)
