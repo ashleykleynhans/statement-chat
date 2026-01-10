@@ -235,6 +235,8 @@ class ChatInterface:
                     category_summary = self.db.get_category_summary_for_statement(stmt_num)
                     actual_by_cat = {s["category"]: abs(s.get("total_debits", 0) or 0) for s in category_summary}
 
+                    total_budgeted = 0.0
+                    total_spent = 0.0
                     for budget in budgets:
                         cat = budget["category"]
                         budget_amt = budget["amount"]
@@ -242,14 +244,24 @@ class ChatInterface:
                         remaining = budget_amt - actual
                         pct = (actual / budget_amt * 100) if budget_amt > 0 else 0
                         status = "OVER BUDGET" if pct > 100 else f"{pct:.0f}% used"
+                        total_budgeted += budget_amt
+                        total_spent += actual
                         context_parts.append(
                             f"- {cat}: R{actual:.2f} spent of R{budget_amt:.2f} budget "
                             f"(R{remaining:.2f} remaining, {status})"
                         )
 
+                    total_remaining = total_budgeted - total_spent
+                    context_parts.append(
+                        f"\nOVERALL BUDGET TOTAL: R{total_budgeted:.2f} budgeted, "
+                        f"R{total_spent:.2f} spent, R{total_remaining:.2f} remaining"
+                    )
+
         context_parts.append("\nRelevant transactions:")
 
         # Limit to most relevant transactions for context
+        total_debits = 0.0
+        total_credits = 0.0
         for tx in transactions[:15]:
             date = tx.get("date", "Unknown")
             desc = tx.get("description", "")[:50]
@@ -257,6 +269,11 @@ class ChatInterface:
             category = tx.get("category", "uncategorized")
             tx_type = tx.get("transaction_type", "unknown")
             recipient = tx.get("recipient_or_payer", "")
+
+            if tx_type == "debit":
+                total_debits += abs(amount)
+            else:
+                total_credits += abs(amount)
 
             line = f"- {date}: {desc}"
             if recipient:
@@ -266,6 +283,9 @@ class ChatInterface:
 
         if len(transactions) > 15:
             context_parts.append(f"\n... and {len(transactions) - 15} more transactions")
+
+        # Provide pre-calculated totals
+        context_parts.append(f"\nTOTAL of above transactions: R{total_debits:.2f} spent (debits), R{total_credits:.2f} received (credits)")
 
         return "\n".join(context_parts)
 
@@ -277,22 +297,30 @@ class ChatInterface:
         last_month = (today.replace(day=1) - timedelta(days=1)).strftime("%B %Y")
 
         system_prompt = f"""You are a helpful assistant that answers questions about bank transactions.
-You have access to the user's transaction history. Be concise and helpful.
-When mentioning amounts, use South African Rand (R) currency.
-If you can't find the specific information requested, say so and suggest what else might be helpful.
-Remember the conversation history to answer follow-up questions.
-Always address the user directly using "you" and "your" - never refer to them as "the user".
-Always include the amount when mentioning specific transactions.
+Be concise and direct. Use South African Rand (R) for amounts.
+Always address the user as "you"/"your", never "the user".
 
-IMPORTANT: Today's date is {current_date}. The current month is {current_month}. Last month was {last_month}.
-Use these dates when interpreting time-based queries like "last month" or "this month"."""
+When listing spending or transactions:
+- List each transaction with its date and amount
+- Use the pre-calculated TOTAL provided in the context - never calculate totals yourself
+- Example format:
+  "You spent R27,030.98 on ceiling repairs:
+  - 15 Jan 2024: R9,460.84
+  - 20 Feb 2024: R17,570.14"
 
-        user_message = f"""Context about the user's transactions:
+For budget questions:
+- If asked about a specific category, report that category's budget status
+- If asked about overall/total budget, use the OVERALL BUDGET TOTAL from the context
+- Each category has its own separate budget - don't mix them
+
+Today is {current_date}. Current month: {current_month}. Last month: {last_month}."""
+
+        user_message = f"""Context:
 {context}
 
-User question: {query}
+Question: {query}
 
-Please provide a helpful, concise answer based on the transaction data above."""
+Answer concisely and directly."""
 
         # Add user message to history
         self._conversation_history.append({

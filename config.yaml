@@ -7,7 +7,7 @@ bank: fnb                    # Options: fnb (more to be added)
 ollama:
   host: localhost
   port: 11434
-  model: llama3.2           # Model for classification and chat
+  model: llama3.1:8b           # Model for classification and chat
 
 # Paths
 paths:
