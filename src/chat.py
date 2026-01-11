@@ -1,5 +1,3 @@
-"""Chat interface for querying bank transactions with Ollama."""
-
 import json
 import re
 from datetime import datetime, timedelta
@@ -345,14 +343,14 @@ class ChatInterface:
                 line = f"- {date}: {desc}"
                 if recipient:
                     line += f" ({recipient})"
-                line += f" | R{abs(amount):.2f} {tx_type} | {category}"
+                line += f" | R{abs(amount):,.2f} {tx_type} | {category}"
                 context_parts.append(line)
 
             if len(transactions) > 15:
                 context_parts.append(f"\n... and {len(transactions) - 15} more transactions")
 
-            # Provide pre-calculated totals
-            context_parts.append(f"\nTOTAL of above transactions: R{total_debits:.2f} spent (debits), R{total_credits:.2f} received (credits)")
+            # Provide pre-calculated totals - make them very prominent
+            context_parts.append(f"\n>>> TOTAL SPENT: R{total_debits:,.2f} | TOTAL RECEIVED: R{total_credits:,.2f} <<<")
 
         return "\n".join(context_parts)
 
@@ -370,13 +368,20 @@ Always address the user as "you"/"your", never "the user".
 For greetings (hi, hello, hey, etc.), respond with a friendly greeting and offer to help with their transactions. Don't list transaction data for greetings.
 
 When answering questions about spending or transactions:
-- ALWAYS list each individual transaction with its date and amount
-- Use the pre-calculated TOTAL provided in the context - never calculate totals yourself
-- Required format:
-  "You spent R27,030.98 on ceiling repairs:
-  - 15 Jan 2024: R9,460.84
-  - 20 Feb 2024: R17,570.14"
-- Never just give a total without listing the individual transactions
+- List EVERY transaction from the context - do NOT summarize, aggregate, or combine transactions
+- NEVER say things like "(x3)" or "3 transactions of R83" - list each one separately
+- CRITICAL: Use the ">>> TOTAL SPENT" value from context - NEVER add up amounts yourself (you will get it wrong)
+- Required format - list each transaction on its own line:
+  "You paid R14,713.00 to John Doe:
+  - 03 Nov 2025: Send Money App Dr Send John Doe - R1,000.00
+  - 30 Oct 2025: Internet Pmt To John Car Repairs - R1,800.00
+  - 03 Oct 2025: FNB App Payment To John - R5,000.00
+  - 30 Sep 2025: Send Money App Dr Send John Doe - R83.00
+  - 30 Sep 2025: Send Money App Dr Send John Doe - R3,000.00
+  - 30 Sep 2025: Send Money App Dr Send John Doe - R3,000.00"
+- Even if transactions have the same date and description, list each one separately
+- Never skip transactions or combine them
+- For medical/doctor transactions: Do NOT extract names from payment references - just say "the doctor", "the cardiologist", "the dentist" etc. Payment references often contain the payer's name, not the recipient.
 
 For budget questions:
 - CRITICAL: Copy the EXACT numbers from the budget context CHARACTER-FOR-CHARACTER including commas

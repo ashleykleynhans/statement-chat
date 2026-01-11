@@ -273,11 +273,11 @@ class TestBuildContext:
 
         context = chat._build_context(transactions, "test query")
 
-        assert "10000.00" in context
+        assert "10,000.00" in context
         assert "500.00" in context
         # Check pre-calculated totals include credits
-        assert "R500.00 spent (debits)" in context
-        assert "R10000.00 received (credits)" in context
+        assert "TOTAL SPENT: R500.00" in context
+        assert "TOTAL RECEIVED: R10,000.00" in context
 
 
 class TestConversationHistory:
