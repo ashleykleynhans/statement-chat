@@ -47,6 +47,37 @@
 
   $: budgetInfo = extractBudgetInfo(message.content);
 
+  // Generate spending chart data from transactions (grouped by month)
+  function getSpendingChartData(transactions) {
+    if (!transactions || transactions.length < 3) return null;
+
+    // Only include debits for spending chart
+    const debits = transactions.filter(tx => tx.transaction_type === 'debit');
+    if (debits.length < 3) return null;
+
+    // Group by month
+    const byMonth = {};
+    debits.forEach(tx => {
+      const month = tx.date?.substring(0, 7); // "2024-12"
+      if (month) {
+        byMonth[month] = (byMonth[month] || 0) + parseFloat(tx.amount || 0);
+      }
+    });
+
+    // Convert to array and sort by date (newest first)
+    const months = Object.entries(byMonth)
+      .map(([month, total]) => ({ month, total }))
+      .sort((a, b) => b.month.localeCompare(a.month))
+      .slice(0, 12); // Most recent 12 months max
+
+    if (months.length < 2) return null;
+
+    const maxAmount = Math.max(...months.map(m => m.total));
+    return { months, maxAmount };
+  }
+
+  $: spendingChart = getSpendingChartData(message.transactions);
+
   // Format message content with colors for budget info
   function formatContent(content) {
     if (!content) return '';
@@ -109,7 +140,8 @@
 
     // Format transaction lists into tables
     // Match lists that follow a header line ending with ":"
-    const listPattern = /^(.*?:)\n((?:[-•] .+\n?|[A-Z].+\| R[\d,\.]+\n?)+)/gm;
+    // Captures lines starting with: bullet points, capital letters with |, or dates
+    const listPattern = /^(.*?:)\n((?:[-•] .+\n?|[A-Z].+\| R[\d,\.]+\n?|\d{4}-\d{2}(?:-\d{2})?: .+\n?)+)/gm;
     formatted = formatted.replace(listPattern, (match, header, list) => {
       const lines = list.trim().split('\n').filter(l => l.trim());
       if (lines.length === 0) return match;
@@ -122,10 +154,30 @@
       const amtPrefix = isDeposit ? '+' : '-';
 
       const rows = lines.map(line => {
+        // Skip lines that don't look like transactions
+        if (line.includes('no previous transactions') || line.includes('no transactions')) {
+          return '';
+        }
         // Pattern: "- 2025-11-03: Description - R1,000.00"
         const dateDescAmtMatch = line.match(/^[-•] (\d{4}-\d{2}-\d{2}): (.+?) - (R[\d,\.]+)$/);
         if (dateDescAmtMatch) {
           return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${dateDescAmtMatch[1]}</td><td class="py-2 pr-3">${dateDescAmtMatch[2]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${dateDescAmtMatch[3]}</td></tr>`;
+        }
+        // Pattern: "2025-12-29    Description    -R119.99" (tab/space separated)
+        const tabMatch = line.match(/^(\d{4}-\d{2}-\d{2})\s+(.+?)\s+(-?R[\d,\.]+)$/);
+        if (tabMatch) {
+          const amt = tabMatch[3].replace(/^-/, '');
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${tabMatch[1]}</td><td class="py-2 pr-3">${tabMatch[2]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${amt}</td></tr>`;
+        }
+        // Pattern: "2025-04: Description - R2.50" (year-month only)
+        const monthMatch = line.match(/^(\d{4}-\d{2}): (.+?) - (R[\d,\.]+)$/);
+        if (monthMatch) {
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${monthMatch[1]}</td><td class="py-2 pr-3">${monthMatch[2]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${monthMatch[3]}</td></tr>`;
+        }
+        // Pattern: "2025-04-01: Description - R2.50" (full date without bullet)
+        const fullDateMatch = line.match(/^(\d{4}-\d{2}-\d{2}): (.+?) - (R[\d,\.]+)$/);
+        if (fullDateMatch) {
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${fullDateMatch[1]}</td><td class="py-2 pr-3">${fullDateMatch[2]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${fullDateMatch[3]}</td></tr>`;
         }
         // Pattern: "Description | R1,000.00" (no dash prefix)
         const pipeMatch = line.match(/^(.+?) \| (R[\d,\.]+)$/);
@@ -137,9 +189,12 @@
         if (amtDateMatch) {
           return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${amtDateMatch[2]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${amtDateMatch[1]}</td></tr>`;
         }
-        // Fallback: just show the line
-        return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2" colspan="3">${line.replace(/^[-•] /, '')}</td></tr>`;
-      }).join('');
+        // Only show fallback if line has an amount
+        if (line.match(/R[\d,\.]+/)) {
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2" colspan="3">${line.replace(/^[-•] /, '')}</td></tr>`;
+        }
+        return '';
+      }).filter(r => r).join('');
 
       return `${header}<table class="mt-3 text-sm w-full"><tbody>${rows}</tbody></table>`;
     });
@@ -184,6 +239,27 @@
             ? 'text-yellow-600 dark:text-yellow-400'
             : 'text-green-500'}">
           {budgetInfo.percent}% used
+        </div>
+      </div>
+    {/if}
+
+    <!-- Spending chart (for transactions with multiple months) -->
+    {#if spendingChart}
+      <div class="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">Spending by month</div>
+        <div class="space-y-1">
+          {#each spendingChart.months as item}
+            <div class="flex items-center gap-2 text-xs">
+              <span class="w-16 text-gray-500">{item.month}</span>
+              <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded h-4">
+                <div
+                  class="bg-red-400 dark:bg-red-500 h-4 rounded"
+                  style="width: {(item.total / spendingChart.maxAmount) * 100}%"
+                ></div>
+              </div>
+              <span class="w-20 text-right">R{item.total.toFixed(2)}</span>
+            </div>
+          {/each}
         </div>
       </div>
     {/if}

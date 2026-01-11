@@ -253,6 +253,12 @@ class ChatInterface:
         # Extract potential search terms
         search_terms = self._extract_search_terms(query)
 
+        # Helper to filter out fee transactions (unless specifically searching for fees)
+        def filter_fees(results: list[dict], query: str) -> list[dict]:
+            if "fee" in query.lower():
+                return results  # Keep fees if user asked about fees
+            return [tx for tx in results if tx.get("category") != "fees"]
+
         # First try multi-word phrases (e.g., "ceiling repairs" not just "ceiling")
         if len(search_terms) >= 2:
             # Try pairs of consecutive terms as phrases
@@ -260,14 +266,18 @@ class ChatInterface:
                 phrase = f"{search_terms[i]} {search_terms[i+1]}"
                 results = self.db.search_transactions(phrase)
                 if results:
-                    return limit_if_when_last(results)
+                    filtered = filter_fees(results, query)
+                    if filtered:
+                        return limit_if_when_last(filtered)
 
         # Fall back to individual terms
         for term in search_terms:
             # Try original term
             results = self.db.search_transactions(term)
             if results:
-                return limit_if_when_last(results)
+                filtered = filter_fees(results, query)
+                if filtered:
+                    return limit_if_when_last(filtered)
             # Try hyphen variations (xray <-> x-ray, e-mail <-> email)
             variations = []
             if "-" in term:
@@ -280,7 +290,9 @@ class ChatInterface:
             for variant in variations:
                 results = self.db.search_transactions(variant)
                 if results:
-                    return limit_if_when_last(results)
+                    filtered = filter_fees(results, query)
+                    if filtered:
+                        return limit_if_when_last(filtered)
 
         # Only fall back to recent transactions for purely vague queries
         # Check if query only contains vague/generic words
@@ -420,16 +432,9 @@ Always address the user as "you"/"your", never "the user".
 For greetings (hi, hello, hey, etc.), respond with a friendly greeting and offer to help with their transactions. Don't list transaction data for greetings.
 
 When answering questions about spending or transactions:
-- Context shows "X transactions (Y payments, Z deposits)" - you MUST list exactly Y payments
+- Give a concise summary with the total amount
 - CRITICAL: The context ends with ">>> Y PAYMENTS TOTALING: R27,030.98 <<<" - copy this EXACT amount including cents
 - NEVER do math - NEVER add up amounts - NEVER round - just COPY the total from context
-- List ALL transactions in a SINGLE FLAT LIST with DATE, DESCRIPTION, AMOUNT on each line:
-  "You spent R14,206.20 (15 payments):
-  - 2025-11-03: Send Money App Dr Send Chanel Smith - R1,000.00
-  - 2025-10-30: Internet Pmt To Chanel Car Repairs - R1,800.00
-  - 2025-10-18: FNB App Payment To Keanu Bday Cakes - R1,190.00"
-- ALWAYS include the date from context - format: "- DATE: DESCRIPTION - RAMOUNT"
-- NEVER use "(x2)", "(x3)", "twice", "3 times" etc - list each separately
 - For medical/doctor transactions: say "the doctor", not names from payment references
 
 For budget questions:

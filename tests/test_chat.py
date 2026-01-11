@@ -651,6 +651,21 @@ class TestFindRelevantTransactionsExtended:
             mock_db.get_all_transactions.assert_not_called()
             assert result == []
 
+    def test_fee_search_keeps_fees(self, mock_db):
+        """Test searching for fees keeps fee transactions."""
+        fee_transactions = [
+            {"description": "Service Fee", "amount": 5, "category": "fees"},
+            {"description": "Monthly Fee", "amount": 10, "category": "fees"},
+        ]
+        mock_db.search_transactions.return_value = fee_transactions
+
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            result = chat._find_relevant_transactions("show my fees")
+
+            # Should keep fee transactions when searching for fees
+            assert len(result) == 2
+
 
 class TestFollowUpDetection:
     """Tests for follow-up query detection."""
