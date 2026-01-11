@@ -395,6 +395,22 @@
       await loadTransactions();
     }
   }
+
+  let jumpToPage = '';
+
+  function handleJumpToPage() {
+    const page = parseInt(jumpToPage, 10);
+    if (!isNaN(page) && page >= 1 && page <= totalPages) {
+      goToPage(page - 1);  // Convert to 0-indexed
+      jumpToPage = '';
+    }
+  }
+
+  function handleJumpKeydown(event) {
+    if (event.key === 'Enter') {
+      handleJumpToPage();
+    }
+  }
 </script>
 
 <div class="p-6 h-full overflow-y-auto">
@@ -609,9 +625,30 @@
     <!-- Pagination -->
     {#if totalPages > 1 && !searchQuery && !hasActiveFilter()}
       <div class="flex flex-col sm:flex-row items-center justify-between mt-4 gap-3">
-        <span class="text-sm text-gray-600 dark:text-gray-400 order-2 sm:order-1">
-          Page {pageNum + 1} of {totalPages}
-        </span>
+        <div class="flex items-center gap-2 order-2 sm:order-1">
+          <span class="text-sm text-gray-600 dark:text-gray-400">
+            Page {pageNum + 1} of {totalPages}
+          </span>
+          <!-- Jump to page -->
+          <div class="flex items-center gap-1">
+            <input
+              type="number"
+              bind:value={jumpToPage}
+              on:keydown={handleJumpKeydown}
+              placeholder="#"
+              min="1"
+              max={totalPages}
+              class="w-14 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              on:click={handleJumpToPage}
+              class="px-2 py-1 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              title="Go to page"
+            >
+              Go
+            </button>
+          </div>
+        </div>
 
         <div class="flex items-center gap-1 order-1 sm:order-2">
           <!-- First page -->

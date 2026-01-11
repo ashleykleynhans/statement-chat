@@ -58,6 +58,7 @@ categories:
   - toll
   - toys
   - traffic_fines
+  - training
   - transfer
   - transport
   - tv_license
@@ -310,6 +311,10 @@ classification_rules:
   # Traffic Fines
   "Traffic Fine": traffic_fines
 
+  # Training
+  "Udemy": training
+  "Coursera": training
+
   # Transfers
   "FNB App Transfer": transfer
   "FNB App Payment To Transfer": transfer
@@ -350,6 +355,7 @@ classification_rules:
   "Credit/Deposit": deposit
   "Credit Voucher": deposit
   "FNB App Payment From": deposit
+  "FNB OB Pmt": deposit
   "Inward Swift": deposit
   "Payment From": deposit
   "Magtape Credit": deposit
