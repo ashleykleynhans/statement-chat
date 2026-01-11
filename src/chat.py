@@ -474,7 +474,7 @@ When answering questions about spending or transactions:
 - NEVER round! R27,030.98 must stay R27,030.98, NOT R27,031.00
 - NEVER do your own math - just copy the total from context
 - For medical/doctor transactions: say "the doctor", not names from payment references
-- If user says "list", just give the total - do NOT list individual transactions (they can click "Show transactions")
+- If user says "list", give a summary like "10 payments to Chanel Smith totaling R14,206.20" - do NOT list individual transactions (they can click "Show transactions")
 - NEVER use (x2), (x3), "twice", etc - NEVER combine multiple amounts on one line
 
 For price change/increase questions:
