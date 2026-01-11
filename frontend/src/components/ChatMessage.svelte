@@ -114,21 +114,28 @@
       const lines = list.trim().split('\n').filter(l => l.trim());
       if (lines.length === 0) return match;
 
+      // Check if this is a deposit/received section
+      const isDeposit = /received|deposit|credit/i.test(header);
+      const amtClass = isDeposit
+        ? 'text-green-500 dark:text-green-400'
+        : 'text-red-500 dark:text-red-400';
+      const amtPrefix = isDeposit ? '+' : '-';
+
       const rows = lines.map(line => {
         // Pattern: "- 2025-11-03: Description - R1,000.00"
         const dateDescAmtMatch = line.match(/^[-•] (\d{4}-\d{2}-\d{2}): (.+?) - (R[\d,\.]+)$/);
         if (dateDescAmtMatch) {
-          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${dateDescAmtMatch[1]}</td><td class="py-2 pr-3">${dateDescAmtMatch[2]}</td><td class="py-2 text-right text-red-500 dark:text-red-400 font-medium">-${dateDescAmtMatch[3]}</td></tr>`;
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${dateDescAmtMatch[1]}</td><td class="py-2 pr-3">${dateDescAmtMatch[2]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${dateDescAmtMatch[3]}</td></tr>`;
         }
         // Pattern: "Description | R1,000.00" (no dash prefix)
         const pipeMatch = line.match(/^(.+?) \| (R[\d,\.]+)$/);
         if (pipeMatch) {
-          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3">${pipeMatch[1]}</td><td class="py-2 text-right text-red-500 dark:text-red-400 font-medium">-${pipeMatch[2]}</td></tr>`;
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3">${pipeMatch[1]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${pipeMatch[2]}</td></tr>`;
         }
         // Pattern: "- R1,000.00 (2025-11-03)"
         const amtDateMatch = line.match(/^[-•] (R[\d,\.]+) \((\d{4}-\d{2}-\d{2})\)$/);
         if (amtDateMatch) {
-          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${amtDateMatch[2]}</td><td class="py-2 text-right text-red-500 dark:text-red-400 font-medium">-${amtDateMatch[1]}</td></tr>`;
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${amtDateMatch[2]}</td><td class="py-2 text-right ${amtClass} font-medium">${amtPrefix}${amtDateMatch[1]}</td></tr>`;
         }
         // Fallback: just show the line
         return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2" colspan="3">${line.replace(/^[-•] /, '')}</td></tr>`;
