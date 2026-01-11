@@ -72,20 +72,42 @@ categories:
 # Classification rules (checked before LLM, case-insensitive)
 # Format: pattern -> category
 # Note: More specific rules should come before general ones
+#       (ie. ORDERING MATTERS!)
 classification_rules:
   # Withdrawals
   "ATM Cash": withdrawal
   "ATM Withdrawal": withdrawal
+  "Card Cashback": withdrawal
   "Cash Withdrawal": withdrawal
+
+  # Fees
+  "Bank fee": fees
+  "Fees PymtFee": fees
+  "Service Fee": fees
+  "Monthly Fee": fees
+  "Paypal Withdrawal Fee": fees
+
+  # Deposits
+  "Credit/Deposit": deposit
+  "Credit Voucher": deposit
+  "FNB App Payment From": deposit
+  "FNB OB Pmt": deposit
+  "Inward Swift": deposit
+  "Payment From": deposit
+  "Magtape Credit": deposit
+  "Paypal Withdrawal": deposit
+  "Payshap Credit": deposit
+  "Rtc Credit": deposit
 
   # Airtime
   "Prepaid Airtime": airtime
 
   # Cellphone
-  "Vodacom": cellphone
+  "4 U": cellphone
+  "Cell C": cellphone
   "MTN": cellphone
   "Telkom": cellphone
-  "Cell C": cellphone
+  "Vodacom": cellphone
 
   # Dog Parlour
   "Dog Parlour": dog_parlour
@@ -100,15 +122,19 @@ classification_rules:
 
   # Entertainment
   "Gold Reef City": entertainment
+  "Hashtag": entertainment
   "Ster Kinekor": entertainment
   "Nu Metro": entertainment
   "Rietvlei": entertainment
   "Ticketmaster Sa": entertainment
+  "Tin Cup Driving": entertainment
+  "Ushaka Marine World": entertainment
 
   # Ewallet
   "Send Money": ewallet
 
   # Fast Food
+  "BK Meyersdal": fast_food
   "Burger King": fast_food
   "Chicken Licken": fast_food
   "Domino's": fast_food
@@ -125,44 +151,41 @@ classification_rules:
   "Starbucks": fast_food
   "Steers": fast_food
   "Uber Eats": fast_food
-  "Wimpy": fast_food
-
-  # Fees
-  "Bank fee": fees
-  "Fees PymtFee": fees
-  "Service Fee": fees
-  "Monthly Fee": fees
-  "Paypal Withdrawal Fee": fees
+  "Www.Ubereat": fast_food
+  "Zes Mayberry Park": fast_food
 
   # Garden Service
   "Garden Service": garden_service
 
-  # Geo Payments
-  "Geo Payment": geo_payment
-
   # Groceries
   "Alberton Meat": groceries
-  "Woolworths": groceries
+  "Damwal Slaghuis": groceries
   "Checkers": groceries
+  "Food Lover's Market": groceries
+  "Mayberry Park Super": groceries
   "Multisave": groceries
   "Pick n Pay": groceries
-  "PNP Fam": groceries
-  "Spar": groceries
+  "PNP": groceries
   "Shoprite": groceries
-  "Food Lover's Market": groceries
+  "Spar": groceries
+  "Woolworths": groceries
 
   # Gymnastics Lessons
   "Tiny Twisters": gymnastics_lessons
 
   # Hardware
   "Builders": hardware
+  "Hardware": hardware
 
   # Home Maintenance
   "Ceiling Repairs": home_maintenance
   "Electrician": home_maintenance
+  "Garage Repairs": home_maintenance
+  "Immaque-Pools": home_maintenance
   "Percy Fence": home_maintenance
   "Plumber": home_maintenance
   "Roof Repair": home_maintenance
+  "Swimart": home_maintenance
   "The Pool Team": home_maintenance
 
     # Import Duties
@@ -214,14 +237,12 @@ classification_rules:
   "Mediclinic": medical
   "Netcare": medical
   "Neurologist": medical
-  "Optical": medical
-  "Optom": medical
-  "Optometrist": medical
   "Pharmacy": medical
   "Tms Health Ins": medical
 
   # Municipal
   "Ekurhuleni": municipal
+  "Ekurhul*Online": municipal
 
   # Online Shopping
   "Takealot": online_shopping
@@ -230,6 +251,12 @@ classification_rules:
   "Loot": online_shopping
   "Temu": online_shopping
   "*Temu Com": online_shopping
+
+  # Optician
+  "Optical": optician
+  "Optom": optician
+  "Optometrist": optician
+  "Vision Works": optician
 
   # Parking
   "Acsa": parking
@@ -242,11 +269,14 @@ classification_rules:
 
   # Restaurants
   "Fahrenheit": restaurants
+  "Foo Wah": restaurants
   "Mugg & Bean": restaurants
   "Ocean Basket": restaurants
   "Piatto": restaurants
   "Rock N Sole": restaurants
   " Spur": restaurants
+  "The Waffle House": restaurants
+  "Wimpy": restaurants
 
   # Reversals
   "#Rev Ewa": reversal          # Reversal of ewallet fee
@@ -293,6 +323,7 @@ classification_rules:
   "Showmax": subscriptions
   "*Truecaller": subscriptions
   "Truecaller": subscriptions
+  "WWW.F1.COM": subscriptions
   "Xtra Savings": subscriptions
 
   # Swimming Lessons
@@ -300,8 +331,11 @@ classification_rules:
 
   # Toll
   "e-toll": toll
+  "Marianhill": toll
+  "Oribi North": toll
   "Sanral": toll
   "Plaza": toll
+  "Trac Middelburg": toll
 
   # Toys
   "Toy Kingdom": toys
@@ -319,10 +353,6 @@ classification_rules:
   "FNB App Transfer": transfer
   "FNB App Payment To Transfer": transfer
 
-  # Transport
-  "Uber Rides": transport
-  "Uber Sa": transport
-
   # TV License
   "Sabcsauktv": tv_license
 
@@ -339,6 +369,7 @@ classification_rules:
   "Netstar": vehicle_tracking
 
   # Vehicle Maintenance
+  "Associated Motor": vehicle_maintenance
   "Alberton Tyre": vehicle_maintenance
 
   # Vet
@@ -351,26 +382,26 @@ classification_rules:
   "City Power": electricity
   "Electricity": electricity
 
-  # Deposits
-  "Credit/Deposit": deposit
-  "Credit Voucher": deposit
-  "FNB App Payment From": deposit
-  "FNB OB Pmt": deposit
-  "Inward Swift": deposit
-  "Payment From": deposit
-  "Magtape Credit": deposit
-  "Paypal Withdrawal": deposit
-  "Payshap Credit": deposit
-  "Rtc Credit": deposit
+  # Transport
+  "Uber Rides": transport
+  "Uber Sa": transport
 
   # Other specific
+  "DebiCheck": other
+  "Crazy Store": other
   "Github": other
-  "Scaleway": other
-  "Scw*": other
   "Google": other
   "Name-Cheap.Com": other
-  "The Crazy Store": other
+  "Scaleway": other
+  "Scw*": other
+  "Sogo Homes": other
 
-  # EFT Payments (general - keep last)
+  # Geo Payments
+  "Geo Payment": geo_payment
+
+  # EFT Payments - catch-all for unmatched EFT payments (keep before POS)
   "FNB App Payment To": eft_payment
   "Internet Pmt To": eft_payment
+
+  # POS Purchases - catch-all for unmatched POS transactions (keep at end)
+  "POS Purchase": other
