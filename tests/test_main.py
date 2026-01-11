@@ -763,6 +763,25 @@ class TestCmdReimport:
         # Should have called reimport_statement 3 times
         assert mock_reimport.call_count == 3
 
+    @patch('src.main.reimport_statement')
+    @patch('src.main.TransactionClassifier')
+    @patch('src.main.Database')
+    def test_reimport_all_positional(self, mock_db, mock_classifier, mock_reimport, mock_config, tmp_path):
+        """Test reimport with 'all' as positional argument."""
+        mock_classifier.return_value.check_connection.return_value = True
+        mock_reimport.return_value = True
+
+        (tmp_path / "test.pdf").touch()
+
+        config = mock_config.copy()
+        config["paths"]["statements_dir"] = str(tmp_path)
+
+        # Use "all" as positional arg instead of --all flag
+        args = argparse.Namespace(file="all", bank=None, all=False)
+        cmd_reimport(args, config)
+
+        mock_reimport.assert_called_once()
+
     @patch('src.main.TransactionClassifier')
     @patch('src.main.Database')
     def test_reimport_all_empty_directory(self, mock_db, mock_classifier, mock_config, tmp_path):

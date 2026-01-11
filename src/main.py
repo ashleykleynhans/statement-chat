@@ -318,6 +318,11 @@ def cmd_rename(args: argparse.Namespace, config: dict) -> None:
 
 def cmd_reimport(args: argparse.Namespace, config: dict) -> None:
     """Re-import PDF statement(s) (deletes existing and re-imports)."""
+    # Handle "all" as positional argument (bankbot reimport all)
+    if args.file == "all":
+        args.all = True
+        args.file = None
+
     # Validate arguments
     if not args.all and not args.file:
         console.print("[red]Error: Must specify a file or use --all[/red]")
