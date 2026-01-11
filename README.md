@@ -111,6 +111,19 @@ python -m src.main parsers
 # This ensures statements are imported in chronological order
 python -m src.main rename
 
+# Re-import a specific statement (useful after updating classification rules)
+python -m src.main reimport statements/288_Nov_2025.pdf
+
+# Re-import all statements
+python -m src.main reimport all
+
+# Export budgets to JSON or YAML
+python -m src.main export-budget budgets.json
+python -m src.main export-budget budgets.yaml
+
+# Import budgets from file (clears existing budgets first)
+python -m src.main import-budget budgets.json
+
 # Start API server (REST + WebSocket)
 python -m src.main serve
 python -m src.main serve --host 0.0.0.0 --port 3000
