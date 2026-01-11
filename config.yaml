@@ -45,6 +45,7 @@ categories:
   - optician
   - other
   - parking
+  - plumbing
   - restaurants
   - reversal
   - rugby_lessons
@@ -59,6 +60,7 @@ categories:
   - traffic_fines
   - transfer
   - transport
+  - tv_license
   - vacation
   - vehicle_finance
   - vehicle_maintenance
@@ -92,6 +94,7 @@ classification_rules:
 
   # Education (check before eft_payment)
   "School Fees": education
+  "School Reg": education
 
   # Entertainment
   "Ster Kinekor": entertainment
@@ -185,6 +188,7 @@ classification_rules:
 
   # Medical (check before eft_payment)
   "Cardiologist": medical
+  "Circumcision": medical
   "Clicks": medical
   "Ct Scan": medical
   "Dentist": medical
@@ -220,6 +224,10 @@ classification_rules:
   "Acsa": parking
   "Mall Of The South": parking
   "Parking": parking
+
+  # Plumbing
+  "Plumbing": plumbing
+  "Toilet": plumbing
 
   # Restaurants
   "Fahrenheit": restaurants
@@ -297,6 +305,9 @@ classification_rules:
   "Uber Rides": transport
   "Uber Sa": transport
 
+  # TV License
+  "Sabcsauktv": tv_license
+
   # Vacation
   "Resorts": vacation
 
@@ -321,6 +332,7 @@ classification_rules:
   "Credit/Deposit": deposit
   "Credit Voucher": deposit
   "FNB App Payment From": deposit
+  "Lotto Winnings": deposit
   "Payment From": deposit
   "Magtape Credit": deposit
   "Paypal Withdrawal": deposit
@@ -330,6 +342,7 @@ classification_rules:
   "Scaleway": other
   "Scw*": other
   "Google": other
+  "Name-Cheap.Com": other
   "The Crazy Store": other
 
   # EFT Payments (general - keep last)
