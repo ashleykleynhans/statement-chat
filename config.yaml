@@ -98,8 +98,10 @@ classification_rules:
   "School Reg": education
 
   # Entertainment
+  "Gold Reef City": entertainment
   "Ster Kinekor": entertainment
   "Nu Metro": entertainment
+  "Rietvlei": entertainment
   "Ticketmaster Sa": entertainment
 
   # Ewallet
@@ -126,6 +128,7 @@ classification_rules:
 
   # Fees
   "Bank fee": fees
+  "Fees PymtFee": fees
   "Service Fee": fees
   "Monthly Fee": fees
   "Paypal Withdrawal Fee": fees
@@ -199,6 +202,7 @@ classification_rules:
   "Ct Scan": medical
   "Dentist": medical
   "Dis-Chem": medical
+  "Dischem": medical
   "Disc Prem": medical
   " Dr ": medical
   "Doctor": medical
@@ -274,6 +278,7 @@ classification_rules:
 
   # Subscriptions
   "Anthropic": subscriptions
+  "Apple.Com/Bill": subscriptions
   "Claude.Ai": subscriptions
   "DSTV": subscriptions
   "Esp Eskomsep": subscriptions
