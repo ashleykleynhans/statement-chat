@@ -12,7 +12,7 @@ from src import main
 from src.main import (
     cmd_import, cmd_watch, cmd_chat, cmd_list,
     cmd_categories, cmd_stats, cmd_search, cmd_parsers, cmd_rename, cmd_reimport, cmd_serve,
-    cmd_export_budget, cmd_import_budget
+    cmd_export_budget, cmd_import_budget, cmd_debug_ocr
 )
 
 
@@ -1108,3 +1108,243 @@ class TestCmdImportBudget:
 
         # Only valid entry should be imported
         assert mock_db.upsert_budget.call_count == 1
+
+
+class TestCmdDebugOcr:
+    """Tests for cmd_debug_ocr function."""
+
+    def test_debug_ocr_file_not_found(self, mock_config, tmp_path):
+        """Test debug-ocr with non-existent file."""
+        args = argparse.Namespace(
+            file=str(tmp_path / "nonexistent.pdf"),
+            page=1,
+            scale=4,
+            save_image=False
+        )
+
+        with pytest.raises(SystemExit) as exc:
+            cmd_debug_ocr(args, mock_config)
+
+        assert exc.value.code == 1
+
+    @patch('fitz.open')
+    def test_debug_ocr_page_not_found(self, mock_fitz_open, mock_config, tmp_path):
+        """Test debug-ocr with invalid page number."""
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(b"dummy")
+
+        # Mock document with only 1 page
+        mock_doc = MagicMock()
+        mock_doc.__len__ = lambda self: 1
+        mock_fitz_open.return_value = mock_doc
+
+        args = argparse.Namespace(
+            file=str(pdf_file),
+            page=5,  # Page 5 doesn't exist
+            scale=4,
+            save_image=False
+        )
+
+        with pytest.raises(SystemExit) as exc:
+            cmd_debug_ocr(args, mock_config)
+
+        assert exc.value.code == 1
+
+    @patch('pdfplumber.open')
+    @patch('pytesseract.image_to_string')
+    @patch('fitz.Matrix')
+    @patch('fitz.open')
+    def test_debug_ocr_success(self, mock_fitz_open, mock_fitz_matrix, mock_tesseract, mock_pdfplumber_open, mock_config, tmp_path):
+        """Test successful debug-ocr execution."""
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(b"dummy")
+
+        # Mock fitz
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+        mock_page.get_text.return_value = {"blocks": []}
+
+        mock_doc = MagicMock()
+        mock_doc.__len__ = lambda self: 1
+        mock_doc.__getitem__ = lambda self, idx: mock_page
+        mock_fitz_open.return_value = mock_doc
+        mock_fitz_matrix.return_value = MagicMock()
+
+        # Mock tesseract
+        mock_tesseract.return_value = "01 Dec Test Transaction 100.00 1000.00Cr\n"
+
+        # Mock pdfplumber
+        mock_pdf_page = MagicMock()
+        mock_pdf_page.extract_text.return_value = "01 Dec Test 100.00 1000.00Cr"
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_pdf_page]
+        mock_pdf.__enter__ = MagicMock(return_value=mock_pdf)
+        mock_pdf.__exit__ = MagicMock(return_value=False)
+        mock_pdfplumber_open.return_value = mock_pdf
+
+        args = argparse.Namespace(
+            file=str(pdf_file),
+            page=1,
+            scale=4,
+            save_image=False
+        )
+
+        with patch('PIL.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.size = (100, 100)
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            # Should not raise
+            cmd_debug_ocr(args, mock_config)
+
+    @patch('pdfplumber.open')
+    @patch('pytesseract.image_to_string')
+    @patch('fitz.Matrix')
+    @patch('fitz.open')
+    def test_debug_ocr_save_image(self, mock_fitz_open, mock_fitz_matrix, mock_tesseract, mock_pdfplumber_open, mock_config, tmp_path):
+        """Test debug-ocr with save_image option."""
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(b"dummy")
+
+        # Mock fitz
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+        mock_page.get_text.return_value = {"blocks": []}
+
+        mock_doc = MagicMock()
+        mock_doc.__len__ = lambda self: 1
+        mock_doc.__getitem__ = lambda self, idx: mock_page
+        mock_fitz_open.return_value = mock_doc
+        mock_fitz_matrix.return_value = MagicMock()
+
+        # Mock tesseract
+        mock_tesseract.return_value = ""
+
+        # Mock pdfplumber
+        mock_pdf_page = MagicMock()
+        mock_pdf_page.extract_text.return_value = ""
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_pdf_page]
+        mock_pdf.__enter__ = MagicMock(return_value=mock_pdf)
+        mock_pdf.__exit__ = MagicMock(return_value=False)
+        mock_pdfplumber_open.return_value = mock_pdf
+
+        args = argparse.Namespace(
+            file=str(pdf_file),
+            page=1,
+            scale=4,
+            save_image=True
+        )
+
+        with patch('PIL.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.size = (100, 100)
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            cmd_debug_ocr(args, mock_config)
+
+            # Image.save should have been called
+            mock_img.save.assert_called_once()
+
+    @patch('pdfplumber.open')
+    @patch('pytesseract.image_to_string')
+    @patch('fitz.Matrix')
+    @patch('fitz.open')
+    def test_debug_ocr_with_hash_description(self, mock_fitz_open, mock_fitz_matrix, mock_tesseract, mock_pdfplumber_open, mock_config, tmp_path):
+        """Test debug-ocr finds lines with # descriptions."""
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(b"dummy")
+
+        # Mock fitz
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+        mock_page.get_text.return_value = {
+            "blocks": [{
+                "type": 0,
+                "lines": [{
+                    "spans": [{"text": "01 Dec #Monthly Fee 120.00 1000.00Cr"}]
+                }]
+            }]
+        }
+
+        mock_doc = MagicMock()
+        mock_doc.__len__ = lambda self: 1
+        mock_doc.__getitem__ = lambda self, idx: mock_page
+        mock_fitz_open.return_value = mock_doc
+        mock_fitz_matrix.return_value = MagicMock()
+
+        # Mock tesseract
+        mock_tesseract.return_value = "#Monthly Fee\n01 Dec 120.00 1000.00Cr\n"
+
+        # Mock pdfplumber
+        mock_pdf_page = MagicMock()
+        mock_pdf_page.extract_text.return_value = "#Monthly Fee"
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_pdf_page]
+        mock_pdf.__enter__ = MagicMock(return_value=mock_pdf)
+        mock_pdf.__exit__ = MagicMock(return_value=False)
+        mock_pdfplumber_open.return_value = mock_pdf
+
+        args = argparse.Namespace(
+            file=str(pdf_file),
+            page=1,
+            scale=4,
+            save_image=False
+        )
+
+        with patch('PIL.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.size = (100, 100)
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            # Should not raise
+            cmd_debug_ocr(args, mock_config)
+
+    @patch('src.main.get_config')
+    @patch('src.main.cmd_debug_ocr')
+    def test_main_debug_ocr_command(self, mock_cmd, mock_config, tmp_path):
+        """Test main with debug-ocr command."""
+        mock_config.return_value = {
+            "bank": "fnb",
+            "ollama": {"host": "localhost", "port": 11434, "model": "llama3.2"},
+            "paths": {"database": "test.db", "statements_dir": "./statements"},
+        }
+
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.touch()
+
+        with patch.object(sys, 'argv', ['prog', 'debug-ocr', str(pdf_file)]):
+            main.main()
+
+        mock_cmd.assert_called_once()
+
+    @patch('src.main.get_config')
+    @patch('src.main.cmd_debug_ocr')
+    def test_main_debug_ocr_with_options(self, mock_cmd, mock_config, tmp_path):
+        """Test main with debug-ocr command and options."""
+        mock_config.return_value = {
+            "bank": "fnb",
+            "ollama": {"host": "localhost", "port": 11434, "model": "llama3.2"},
+            "paths": {"database": "test.db", "statements_dir": "./statements"},
+        }
+
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.touch()
+
+        with patch.object(sys, 'argv', ['prog', 'debug-ocr', str(pdf_file), '--page', '2', '--scale', '6', '--save-image']):
+            main.main()
+
+        mock_cmd.assert_called_once()
+        args = mock_cmd.call_args[0][0]
+        assert args.page == 2
+        assert args.scale == 6
+        assert args.save_image is True

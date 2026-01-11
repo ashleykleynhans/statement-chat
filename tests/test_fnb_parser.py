@@ -637,6 +637,273 @@ class TestOCRFallback:
 
         assert result[0].description == "Credit/Deposit"
 
+    @patch.object(FNBParser, '_extract_descriptions_via_ocr')
+    def test_fill_missing_year_extraction_from_statement_date(self, mock_ocr, parser, tmp_path):
+        """Test year extraction from statement_date (lines 152-154)."""
+        mock_ocr.return_value = {}
+
+        transactions = [
+            Transaction(date="2025-10-01", description="Bank fee/charge", amount=-100.0),
+        ]
+
+        # With valid statement_date, year should be extracted
+        result = parser._fill_missing_descriptions_with_ocr(
+            tmp_path / "test.pdf", transactions, statement_date="2025-11-01"
+        )
+
+        # OCR should have been called with year=2025
+        mock_ocr.assert_called_once()
+        call_args = mock_ocr.call_args
+        assert call_args[0][1] == 2025  # year argument
+
+    @patch.object(FNBParser, '_extract_descriptions_via_ocr')
+    def test_fill_missing_year_extraction_invalid_date(self, mock_ocr, parser, tmp_path):
+        """Test year extraction handles invalid statement_date (ValueError branch, lines 152-154)."""
+        mock_ocr.return_value = {}
+
+        transactions = [
+            Transaction(date="2025-10-01", description="Bank fee/charge", amount=-100.0),
+        ]
+
+        # With invalid statement_date, year extraction should fail gracefully
+        result = parser._fill_missing_descriptions_with_ocr(
+            tmp_path / "test.pdf", transactions, statement_date="invalid-date"
+        )
+
+        # OCR should have been called with year=None (fallback to current year internally)
+        mock_ocr.assert_called_once()
+        call_args = mock_ocr.call_args
+        assert call_args[0][1] is None  # year argument should be None
+
+    @patch.object(FNBParser, '_extract_descriptions_via_ocr')
+    def test_fill_missing_year_extraction_type_error(self, mock_ocr, parser, tmp_path):
+        """Test year extraction handles TypeError (lines 152-154)."""
+        mock_ocr.return_value = {}
+
+        transactions = [
+            Transaction(date="2025-10-01", description="Bank fee/charge", amount=-100.0),
+        ]
+
+        # With None statement_date (TypeError on slicing)
+        result = parser._fill_missing_descriptions_with_ocr(
+            tmp_path / "test.pdf", transactions, statement_date=None
+        )
+
+        # Should not crash, OCR should be called with year=None
+        mock_ocr.assert_called_once()
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_standalone_hash_description(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR extracts standalone # description lines (lines 222-223)."""
+        # Mock OCR output with standalone # description followed by transaction without description
+        mock_tesseract.image_to_string.return_value = (
+            "#Monthly Account Fee\n"
+            "01 Dec 120.00 3660.06\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2025)
+
+        # Should have associated standalone description with the transaction
+        assert ("12-01", -120.0) in result
+        assert result[("12-01", -120.0)] == "#Monthly Account Fee"
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_inline_hash_description(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR extracts inline # descriptions (hash_match pattern, line 237-251)."""
+        # Mock OCR output with inline # description
+        mock_tesseract.image_to_string.return_value = (
+            "01 Dec #Monthly Account Fee 120.00 3660.06\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2025)
+
+        # Should have extracted inline # description
+        assert ("12-01", -120.0) in result
+        assert "#Monthly Account Fee" in result[("12-01", -120.0)]
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_hash_match_invalid_date(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR handles invalid date in hash_match (ValueError branch, line 250)."""
+        # Invalid date (31 Feb doesn't exist) should be skipped
+        mock_tesseract.image_to_string.return_value = (
+            "31 Feb #Invalid Date Fee 100.00 1000.00\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2025)
+
+        # Invalid date should be skipped
+        assert len(result) == 0
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_standalone_with_transaction_below(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR matches standalone # description with transaction below (lines 290-312)."""
+        # Standalone description on line 0, transaction without description on line 1
+        mock_tesseract.image_to_string.return_value = (
+            "#Value Added Serv Fees\n"
+            "01 Dec 45.00 3615.06\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2025)
+
+        # Should have matched standalone description with the transaction
+        assert ("12-01", -45.0) in result
+        assert result[("12-01", -45.0)] == "#Value Added Serv Fees"
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_no_standalone_for_transaction(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR transaction without description and no standalone above (lines 300-301)."""
+        # Transaction without description and no standalone description above it
+        mock_tesseract.image_to_string.return_value = (
+            "01 Dec 120.00 3660.06\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2025)
+
+        # No description should be added since there's no standalone above
+        assert len(result) == 0
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_standalone_invalid_date_in_bare_tx(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR handles invalid date in bare transaction match (lines 302-311)."""
+        # Standalone description followed by transaction with invalid date
+        mock_tesseract.image_to_string.return_value = (
+            "#Monthly Fee\n"
+            "31 Feb 100.00 1000.00\n"  # Invalid date
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2025)
+
+        # Invalid date should cause the transaction to be skipped
+        assert len(result) == 0
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_multiple_standalone_uses_closest(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR uses closest preceding standalone description (lines 295-298)."""
+        # Multiple standalone descriptions, should use the closest one above
+        mock_tesseract.image_to_string.return_value = (
+            "#First Description\n"
+            "#Second Description\n"
+            "01 Dec 100.00 1000.00\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2025)
+
+        # Should use the closest standalone description (Second Description)
+        assert ("12-01", -100.0) in result
+        assert result[("12-01", -100.0)] == "#Second Description"
+
 
 class TestParserRegistry:
     """Tests for parser registry functions."""

@@ -490,6 +490,98 @@ def cmd_serve(args: argparse.Namespace, config: dict) -> None:
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
+def cmd_debug_ocr(args: argparse.Namespace, config: dict) -> None:
+    """Debug OCR output for a PDF file."""
+    import io
+
+    import fitz
+    import pytesseract
+    from PIL import Image
+
+    pdf_path = Path(args.file)
+
+    if not pdf_path.exists():
+        console.print(f"[red]File not found: {pdf_path}[/red]")
+        sys.exit(1)
+
+    console.print(f"[bold]OCR Debug for: {pdf_path.name}[/bold]\n")
+
+    doc = fitz.open(pdf_path)
+    page_num = args.page - 1 if args.page else 0
+
+    if page_num >= len(doc):
+        console.print(f"[red]Page {args.page} not found (PDF has {len(doc)} pages)[/red]")
+        sys.exit(1)
+
+    page = doc[page_num]
+
+    # Render at high resolution
+    scale = args.scale or 4
+    mat = fitz.Matrix(scale, scale)
+    pix = page.get_pixmap(matrix=mat)
+    img = Image.open(io.BytesIO(pix.tobytes("png")))
+
+    console.print(f"[dim]Page {page_num + 1}, Scale {scale}x, Image size: {img.size}[/dim]\n")
+
+    # Save rendered image for inspection
+    if args.save_image:
+        img_path = pdf_path.with_suffix(f".page{page_num + 1}.png")
+        img.save(img_path)
+        console.print(f"[green]Saved rendered image to: {img_path}[/green]\n")
+
+    # Try different OCR configs
+    configs = [
+        ("Default", ""),
+        ("PSM 6 (Uniform block)", "--psm 6"),
+        ("PSM 4 (Single column)", "--psm 4"),
+        ("PSM 11 (Sparse text)", "--psm 11"),
+        ("PSM 3 (Full auto)", "--psm 3"),
+    ]
+
+    for name, ocr_config in configs:
+        console.print(f"[bold cyan]Config: {name}[/bold cyan]")
+        console.print("-" * 60)
+
+        # Convert to grayscale
+        gray_img = img.convert("L")
+        ocr_text = pytesseract.image_to_string(gray_img, config=ocr_config)
+
+        # Find lines with dates (transaction lines) or # descriptions
+        lines = ocr_text.split("\n")
+        date_pattern = re.compile(r"\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)", re.IGNORECASE)
+
+        for line in lines:
+            if date_pattern.search(line) or "#" in line:
+                console.print(f"  [yellow]{line}[/yellow]")
+
+        console.print()
+
+    # Also show what pdfplumber extracts
+    console.print(f"[bold cyan]pdfplumber text extraction:[/bold cyan]")
+    console.print("-" * 60)
+    import pdfplumber
+    with pdfplumber.open(pdf_path) as pdf:
+        page_text = pdf.pages[page_num].extract_text() or ""
+        lines = page_text.split("\n")
+        date_pattern = re.compile(r"\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)", re.IGNORECASE)
+        for line in lines:
+            if date_pattern.search(line) or "#" in line:
+                console.print(f"  [green]{line}[/green]")
+
+    # Also try PyMuPDF text extraction with layout
+    console.print(f"\n[bold cyan]PyMuPDF text extraction (with layout):[/bold cyan]")
+    console.print("-" * 60)
+    text_dict = page.get_text("dict")
+    for block in text_dict.get("blocks", []):
+        if block.get("type") == 0:  # Text block
+            for line in block.get("lines", []):
+                line_text = "".join(span.get("text", "") for span in line.get("spans", []))
+                if date_pattern.search(line_text) or "#" in line_text:
+                    console.print(f"  [magenta]{line_text}[/magenta]")
+
+    doc.close()
+
+
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -566,6 +658,13 @@ Examples:
     import_budget_parser = subparsers.add_parser("import-budget", help="Import budgets from a file")
     import_budget_parser.add_argument("input", help="Input file path (e.g., budgets.json or budgets.yaml)")
 
+    # Debug OCR command
+    debug_ocr_parser = subparsers.add_parser("debug-ocr", help="Debug OCR output for a PDF file")
+    debug_ocr_parser.add_argument("file", help="Path to the PDF file")
+    debug_ocr_parser.add_argument("--page", type=int, default=1, help="Page number to analyze (default: 1)")
+    debug_ocr_parser.add_argument("--scale", type=int, default=4, help="Image scale factor (default: 4)")
+    debug_ocr_parser.add_argument("--save-image", action="store_true", help="Save rendered image for inspection")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -595,6 +694,7 @@ Examples:
         "serve": cmd_serve,
         "export-budget": cmd_export_budget,
         "import-budget": cmd_import_budget,
+        "debug-ocr": cmd_debug_ocr,
     }
 
     cmd_func = commands.get(args.command)

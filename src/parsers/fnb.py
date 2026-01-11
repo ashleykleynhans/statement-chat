@@ -61,7 +61,8 @@ class FNBParser(BaseBankParser):
         transactions = self._parse_transactions(full_text)
 
         # Use OCR to fill in missing descriptions (FNB uses special font for # descriptions)
-        transactions = self._fill_missing_descriptions_with_ocr(pdf_path, transactions)
+        # Pass statement_date to determine the year for OCR date parsing
+        transactions = self._fill_missing_descriptions_with_ocr(pdf_path, transactions, statement_date)
 
         return StatementData(
             account_number=account_number,
@@ -128,7 +129,7 @@ class FNBParser(BaseBankParser):
         return date_str
 
     def _fill_missing_descriptions_with_ocr(
-        self, pdf_path: Path, transactions: list[Transaction]
+        self, pdf_path: Path, transactions: list[Transaction], statement_date: str | None = None
     ) -> list[Transaction]:
         """Use OCR to fill in descriptions that couldn't be extracted.
 
@@ -145,8 +146,16 @@ class FNBParser(BaseBankParser):
         if not needs_ocr:
             return transactions
 
+        # Extract year from statement_date for OCR date parsing
+        year = None
+        if statement_date:
+            try:
+                year = int(statement_date[:4])
+            except (ValueError, TypeError):
+                pass
+
         # Extract descriptions via OCR
-        ocr_descriptions = self._extract_descriptions_via_ocr(pdf_path)
+        ocr_descriptions = self._extract_descriptions_via_ocr(pdf_path, year)
 
         # Match OCR descriptions to transactions by month-day and amount
         updated_transactions = []
@@ -168,26 +177,80 @@ class FNBParser(BaseBankParser):
 
         return updated_transactions
 
-    def _extract_descriptions_via_ocr(self, pdf_path: Path) -> dict[tuple, str]:
+    def _extract_descriptions_via_ocr(self, pdf_path: Path, year: int | None = None) -> dict[tuple, str]:
         """Extract transaction descriptions using OCR.
 
         Returns a dict mapping (date, amount) to description.
         """
+        # Use provided year or current year as fallback
+        if year is None:
+            year = datetime.now().year
         descriptions = {}
 
         try:
             doc = fitz.open(pdf_path)
-            for page in doc:
-                # Render page to image at 2x resolution for better OCR
-                mat = fitz.Matrix(2, 2)
+            for page_num, page in enumerate(doc):
+                # Render page to image at 4x resolution for better OCR of small fonts
+                mat = fitz.Matrix(4, 4)
                 pix = page.get_pixmap(matrix=mat)
                 img = Image.open(io.BytesIO(pix.tobytes("png")))
 
-                # Run OCR
-                ocr_text = pytesseract.image_to_string(img)
+                # Convert to grayscale for better OCR
+                img = img.convert("L")
+
+                # Run OCR with custom config for better text detection
+                # PSM 6: Assume uniform block of text (better for tables)
+                # OEM 3: Default, based on what's available
+                custom_config = r'--psm 6 --oem 3'
+                ocr_text = pytesseract.image_to_string(img, config=custom_config)
+
+                # Debug: print OCR output for inspection
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"OCR Page {page_num + 1} output:\n{ocr_text[:2000]}")
+
+                # First pass: collect standalone description lines (starting with #)
+                # and transaction lines without descriptions
+                ocr_lines = ocr_text.split("\n")
+                standalone_descriptions = []
+
+                for i, line in enumerate(ocr_lines):
+                    # Check for standalone # description line (anywhere in the line)
+                    desc_match = re.search(r"#\s*([A-Za-z][A-Za-z0-9\s\-]+)", line)
+                    if desc_match and not re.search(r"\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)", line, re.IGNORECASE):
+                        # Line has # description but no date - it's a standalone description
+                        standalone_descriptions.append((i, "#" + desc_match.group(1).strip()))
+                        continue
 
                 # Parse OCR text for transaction lines
-                for line in ocr_text.split("\n"):
+                for i, line in enumerate(ocr_lines):
+                    # First, try to match lines with # descriptions inline
+                    # Pattern: date | #description | amount | balance
+                    hash_match = re.match(
+                        r"[|\[I]?\s*(\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\s*[|\s]+"
+                        r"(#[A-Za-z][^\d]*?)\s+"
+                        r"([\d,]+\.\d{2})\s+"
+                        r"[\d,]+[.,]\d+",
+                        line,
+                        re.IGNORECASE,
+                    )
+                    if hash_match:
+                        date_str = hash_match.group(1).strip()
+                        description = hash_match.group(2).strip()
+                        amount_str = hash_match.group(3).strip()
+
+                        try:
+                            date_str = re.sub(r"(\d)([A-Za-z])", r"\1 \2", date_str)
+                            dt = datetime.strptime(f"{date_str} {year}", "%d %b %Y")
+                            date = dt.strftime("%Y-%m-%d")
+                            amount_str_clean = amount_str.replace(",", "")
+                            amount = -float(amount_str_clean)  # Fees are debits
+                            month_day = date[5:]
+                            descriptions[(month_day, amount)] = description
+                        except (ValueError, TypeError):
+                            pass
+                        continue
+
                     # Look for transaction pattern: date | description | amount | balance
                     # OCR output format varies, look for date at start
                     # Handle OCR errors like "I30" instead of "30", "¢7" instead of "Cr"
@@ -213,6 +276,41 @@ class FNBParser(BaseBankParser):
                     else:
                         is_debit_match = False
 
+                    # Try pattern for transactions WITHOUT description (just date, amount, balance)
+                    if not match:
+                        match = re.match(
+                            r"[|\[I]?\s*(\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\s+"
+                            r"([\d,]+\.\d{2})\s+"
+                            r"[\d,]+[.,]\d+",
+                            line,
+                            re.IGNORECASE,
+                        )
+                        if match:
+                            # Transaction without inline description - try to find nearby # description
+                            date_str = match.group(1).strip()
+                            amount_str = match.group(2).strip()
+
+                            # Look for closest standalone description above this line
+                            description = None
+                            for desc_line_num, desc_text in reversed(standalone_descriptions):
+                                if desc_line_num < i:
+                                    description = desc_text  # desc_text already has # prefix
+                                    break
+
+                            if description:
+                                # Parse and store this transaction with the found description
+                                try:
+                                    date_str = re.sub(r"(\d)([A-Za-z])", r"\1 \2", date_str)
+                                    dt = datetime.strptime(f"{date_str} {year}", "%d %b %Y")
+                                    date = dt.strftime("%Y-%m-%d")
+                                    amount_str_clean = amount_str.replace(",", "")
+                                    amount = -float(amount_str_clean)  # Fees are debits
+                                    month_day = date[5:]
+                                    descriptions[(month_day, amount)] = description
+                                except (ValueError, TypeError):
+                                    pass
+                            continue
+
                     if match:
                         date_str = match.group(1).strip()
                         description = match.group(2).strip()
@@ -229,7 +327,7 @@ class FNBParser(BaseBankParser):
                         try:
                             # Add spaces if missing
                             date_str = re.sub(r"(\d)([A-Za-z])", r"\1 \2", date_str)
-                            dt = datetime.strptime(f"{date_str} 2025", "%d %b %Y")
+                            dt = datetime.strptime(f"{date_str} {year}", "%d %b %Y")
                             date = dt.strftime("%Y-%m-%d")
                         except ValueError:
                             continue
