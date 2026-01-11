@@ -47,6 +47,21 @@
       'by <span class="text-red-500 font-semibold">$1</span>'
     );
 
+    // Format TOTAL SPENT/RECEIVED lines nicely (remove >>> <<< markers)
+    formatted = formatted.replace(
+      /&gt;&gt;&gt; TOTAL SPENT: (R[\d,\.]+) \| TOTAL RECEIVED: (R[\d,\.]+) &lt;&lt;&lt;/g,
+      '<div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 font-medium">' +
+        '<span class="text-red-500">Spent: $1</span> · ' +
+        '<span class="text-green-500">Received: $2</span></div>'
+    );
+
+    // Handle TOTAL SPENT only (no received)
+    formatted = formatted.replace(
+      /&gt;&gt;&gt; TOTAL SPENT: (R[\d,\.]+) &lt;&lt;&lt;/g,
+      '<div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 font-medium">' +
+        '<span class="text-red-500">Total Spent: $1</span></div>'
+    );
+
     return formatted;
   }
 

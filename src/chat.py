@@ -135,6 +135,16 @@ class ChatInterface:
         """Find transactions relevant to the user's query."""
         query_lower = query.lower()
 
+        # Check if user is asking for the most recent one only
+        is_when_last = "when last" in query_lower or "last time" in query_lower
+
+        def limit_if_when_last(transactions: list[dict]) -> list[dict]:
+            """For 'when last' queries, return only the most recent transaction."""
+            if is_when_last and transactions:
+                sorted_txs = sorted(transactions, key=lambda x: x.get("date", ""), reverse=True)
+                return sorted_txs[:1]
+            return transactions
+
         # Don't return transactions for greetings
         words = set(query_lower.split())
         is_greeting = (words & {"hi", "hello", "hey", "howdy", "greetings", "thanks"} or
@@ -172,7 +182,7 @@ class ChatInterface:
                     # But exclude if it's medical aid/insurance
                     if not any(excl in desc_lower for excl in exclude_terms):
                         doctor_transactions.append(tx)
-            return doctor_transactions
+            return limit_if_when_last(doctor_transactions)
 
         # Check for category keywords (with common synonyms)
         category_synonyms = {
@@ -214,22 +224,24 @@ class ChatInterface:
                 date_start.strftime("%Y-%m-%d"),
                 date_end.strftime("%Y-%m-%d")
             )
-            return [tx for tx in all_in_range if tx.get("category") == matched_category]
+            filtered = [tx for tx in all_in_range if tx.get("category") == matched_category]
+            return limit_if_when_last(filtered)
 
         # If only category specified
         if matched_category:
-            return self.db.get_transactions_by_category(matched_category)
+            return limit_if_when_last(self.db.get_transactions_by_category(matched_category))
 
         # If only date range specified
         if date_start and date_end:
-            return self.db.get_transactions_in_date_range(
+            results = self.db.get_transactions_in_date_range(
                 date_start.strftime("%Y-%m-%d"),
                 date_end.strftime("%Y-%m-%d")
             )
+            return limit_if_when_last(results)
 
         # Check for transaction type
         if "credit" in query_lower or "deposit" in query_lower or "income" in query_lower:
-            return self.db.get_transactions_by_type("credit")
+            return limit_if_when_last(self.db.get_transactions_by_type("credit"))
         if "debit" in query_lower or "expense" in query_lower or "payment" in query_lower:
             # Don't return all debits, too many - let search narrow it down
             pass
@@ -240,7 +252,7 @@ class ChatInterface:
             # Try original term
             results = self.db.search_transactions(term)
             if results:
-                return results
+                return limit_if_when_last(results)
             # Try hyphen variations (xray <-> x-ray, e-mail <-> email)
             variations = []
             if "-" in term:
@@ -253,7 +265,7 @@ class ChatInterface:
             for variant in variations:
                 results = self.db.search_transactions(variant)
                 if results:
-                    return results
+                    return limit_if_when_last(results)
 
         # Only fall back to recent transactions for purely vague queries
         # Check if query only contains vague/generic words
@@ -288,6 +300,8 @@ class ChatInterface:
         stats = self.db.get_stats()
         query_lower = query.lower()
         is_budget_query = "budget" in query_lower
+        # Skip totals for "when last" type queries - they only want the most recent
+        is_when_last_query = "when last" in query_lower or "last time" in query_lower
 
         # For non-budget queries with no transactions, return early
         if not transactions and not is_budget_query:
@@ -367,8 +381,9 @@ class ChatInterface:
             if len(transactions) > 15:
                 context_parts.append(f"\n... and {len(transactions) - 15} more transactions")
 
-            # Provide pre-calculated totals - make them very prominent
-            context_parts.append(f"\n>>> TOTAL SPENT: R{total_debits:,.2f} | TOTAL RECEIVED: R{total_credits:,.2f} <<<")
+            # Provide pre-calculated totals - but skip for "when last" queries
+            if not is_when_last_query:
+                context_parts.append(f"\n>>> TOTAL SPENT: R{total_debits:,.2f} | TOTAL RECEIVED: R{total_credits:,.2f} <<<")
 
         return "\n".join(context_parts)
 

@@ -206,6 +206,21 @@ class TestFindRelevantTransactions:
         assert len(result) == 2
         assert all(tx["category"] == "groceries" for tx in result)
 
+    def test_when_last_returns_only_most_recent(self, chat, mock_db):
+        """Test 'when last' queries return only the most recent transaction."""
+        mock_db.get_transactions_by_category.return_value = [
+            {"date": "2025-01-10", "description": "Woolworths", "amount": 500, "category": "groceries"},
+            {"date": "2025-01-20", "description": "Checkers", "amount": 300, "category": "groceries"},
+            {"date": "2025-01-15", "description": "Spar", "amount": 200, "category": "groceries"},
+        ]
+
+        result = chat._find_relevant_transactions("when last did I buy groceries")
+
+        # Should return only the most recent (2025-01-20)
+        assert len(result) == 1
+        assert result[0]["date"] == "2025-01-20"
+        assert result[0]["description"] == "Checkers"
+
 
 class TestBuildContext:
     """Tests for context building."""
@@ -278,6 +293,24 @@ class TestBuildContext:
         # Check pre-calculated totals include credits
         assert "TOTAL SPENT: R500.00" in context
         assert "TOTAL RECEIVED: R10,000.00" in context
+
+    def test_build_context_when_last_skips_totals(self, chat, mock_db):
+        """Test 'when last' queries don't show totals."""
+        transactions = [
+            {
+                "date": "2025-01-15",
+                "description": "Dr Oosthuizen",
+                "amount": 1140.00,
+                "category": "medical",
+                "transaction_type": "debit",
+            }
+        ]
+
+        context = chat._build_context(transactions, "when last did I pay the doctor")
+
+        assert "1,140.00" in context
+        assert "TOTAL SPENT" not in context
+        assert "TOTAL RECEIVED" not in context
 
 
 class TestConversationHistory:
