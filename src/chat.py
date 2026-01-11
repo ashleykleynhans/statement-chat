@@ -318,8 +318,8 @@ class ChatInterface:
 
                     total_remaining = total_budgeted - total_spent
                     context_parts.append(
-                        f"\nOVERALL BUDGET TOTAL: R{total_budgeted:.2f} budgeted, "
-                        f"R{total_spent:.2f} spent, R{total_remaining:.2f} remaining"
+                        f"\n>>> OVERALL BUDGET TOTAL: R{total_budgeted:.2f} budgeted, "
+                        f"R{total_spent:.2f} spent, R{total_remaining:.2f} remaining <<<"
                     )
 
         # Only include transactions section if there are transactions
@@ -379,7 +379,10 @@ When answering questions about spending or transactions:
 - Never just give a total without listing the individual transactions
 
 For budget questions:
-- CRITICAL: Use ONLY the exact budget amounts from the context. NEVER make up or guess budget amounts.
+- CRITICAL: Use ONLY the EXACT numbers from the "OVERALL BUDGET TOTAL" line in the current context
+- IGNORE any budget numbers mentioned in previous conversation messages - ONLY use the current context
+- Copy the exact Rand amounts character-for-character from the context - do not modify, round, or reformat them
+- If asked about remaining budget, find "R[X] remaining" in the OVERALL BUDGET TOTAL line and use that EXACT number
 - If asked about a specific category, ALWAYS include: budget amount, amount spent, amount remaining, percentage used
 - Format: "Your [category] budget is R[budget_amount]. You've spent R[spent] ([X]% used), with R[remaining] remaining."
 - If the category is NOT listed in the budget status, say "No budget has been set for [category]"
