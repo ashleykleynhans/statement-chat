@@ -714,6 +714,14 @@ class TestFollowUpDetection:
             # Short query (≤5 words) with category name should NOT be follow-up
             assert chat._is_follow_up_query("how much airtime?") is False
 
+    def test_pay_name_query_not_follow_up(self, mock_db):
+        """Test 'Did I pay Name?' is not a follow-up."""
+        with patch('src.chat.ollama.Client'):
+            chat = ChatInterface(mock_db)
+            # "Did I pay Paul?" should trigger a new search, not be a follow-up
+            assert chat._is_follow_up_query("Did I pay Paul?") is False
+            assert chat._is_follow_up_query("Have I paid John?") is False
+
 
 class TestFollowUpContext:
     """Tests for follow-up query context handling."""

@@ -117,6 +117,10 @@ class ChatInterface:
             "budget", "saved", "savings", "spent", "spend", "remaining"
         ])
 
+        # "Did I pay X?" or "Pay X" patterns with a name are specific queries
+        if re.search(r"\bpay\s+[A-Z][a-z]+", query) or re.search(r"\bpaid\s+[A-Z][a-z]+", query):
+            has_specific_keywords = True
+
         # Check if query mentions any category name
         if not has_specific_keywords:
             categories = self.db.get_all_categories()
