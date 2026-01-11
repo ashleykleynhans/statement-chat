@@ -216,7 +216,8 @@ class FNBParser(BaseBankParser):
 
                 for i, line in enumerate(ocr_lines):
                     # Check for standalone # description line (anywhere in the line)
-                    desc_match = re.search(r"#\s*([A-Za-z][A-Za-z0-9\s\-]+)", line)
+                    # Handle OCR artifacts like /# instead of just #
+                    desc_match = re.search(r"[/|\\]?#\s*([A-Za-z][A-Za-z0-9\s\-]+)", line)
                     if desc_match and not re.search(r"\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)", line, re.IGNORECASE):
                         # Line has # description but no date - it's a standalone description
                         standalone_descriptions.append((i, "#" + desc_match.group(1).strip()))
@@ -226,9 +227,10 @@ class FNBParser(BaseBankParser):
                 for i, line in enumerate(ocr_lines):
                     # First, try to match lines with # descriptions inline
                     # Pattern: date | #description | amount | balance
+                    # Handle OCR artifacts like /# instead of just #
                     hash_match = re.match(
                         r"[|\[I]?\s*(\d{1,2}\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\s*[|\s]+"
-                        r"(#[A-Za-z][^\d]*?)\s+"
+                        r"[/|\\]?(#[A-Za-z][^\d]*?)\s+"
                         r"([\d,]+\.\d{2})\s+"
                         r"[\d,]+[.,]\d+",
                         line,
@@ -237,6 +239,8 @@ class FNBParser(BaseBankParser):
                     if hash_match:
                         date_str = hash_match.group(1).strip()
                         description = hash_match.group(2).strip()
+                        # Clean up any remaining OCR artifacts from description
+                        description = re.sub(r"^[/|\\]+", "", description)
                         amount_str = hash_match.group(3).strip()
 
                         try:

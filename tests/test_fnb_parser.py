@@ -904,6 +904,69 @@ class TestOCRFallback:
         assert ("12-01", -100.0) in result
         assert result[("12-01", -100.0)] == "#Second Description"
 
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_strips_slash_artifact(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR strips leading slash from # descriptions (OCR artifact)."""
+        # OCR sometimes produces /# instead of #
+        mock_tesseract.image_to_string.return_value = (
+            "/#Service Fees\n"
+            "01 Jul 39.70 1000.00\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2024)
+
+        # Should have stripped the leading slash
+        assert ("07-01", -39.70) in result
+        assert result[("07-01", -39.70)] == "#Service Fees"
+        assert "/" not in result[("07-01", -39.70)]
+
+    @patch('src.parsers.fnb.fitz')
+    @patch('src.parsers.fnb.pytesseract')
+    def test_extract_descriptions_inline_strips_slash_artifact(self, mock_tesseract, mock_fitz, parser, tmp_path):
+        """Test OCR strips leading slash from inline # descriptions."""
+        # OCR sometimes produces /# instead of # in inline descriptions
+        mock_tesseract.image_to_string.return_value = (
+            "01 Jul /#Service Fees 39.70 1000.00\n"
+        )
+
+        mock_page = MagicMock()
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = MagicMock()
+        mock_doc.__iter__ = lambda self: iter([mock_page])
+        mock_fitz.open.return_value = mock_doc
+        mock_fitz.Matrix.return_value = MagicMock()
+
+        with patch('src.parsers.fnb.Image.open') as mock_image:
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_image.return_value = mock_img
+
+            result = parser._extract_descriptions_via_ocr(tmp_path / "test.pdf", year=2024)
+
+        # Should have stripped the leading slash
+        assert ("07-01", -39.70) in result
+        assert result[("07-01", -39.70)] == "#Service Fees"
+        assert "/" not in result[("07-01", -39.70)]
+
 
 class TestParserRegistry:
     """Tests for parser registry functions."""
