@@ -31,6 +31,7 @@ categories:
   - ewallet
   - fast_food
   - fees
+  - florist
   - fuel
   - garden_service
   - geo_payment
@@ -156,6 +157,12 @@ classification_rules:
   "Uber Eats": fast_food
   "Www.Ubereat": fast_food
   "Zes Mayberry Park": fast_food
+
+  # Florist
+  "Floral": florist
+  "Interflora": florist
+  "Julep": florist
+  "NetFlorist": florist
 
   # Garden Service
   "Garden Service": garden_service

@@ -195,6 +195,8 @@ class ChatInterface:
             "petrol": "fuel",
             "gas": "fuel",
             "medical aid": "medical",  # Only map "medical aid" to category, not "doctor"
+            "flowers": "florist",
+            "flower": "florist",
         }
         # Expand query with synonyms
         expanded_query = query_lower
