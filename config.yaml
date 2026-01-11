@@ -114,6 +114,7 @@ classification_rules:
   "Kota Joe": fast_food
   "Mcd": fast_food
   "Nandos": fast_food
+  "Ola At Rietvlei": fast_food
   "Pizza Hut": fast_food
   "Salsa Mexican Grill": fast_food
   "Starbucks": fast_food
@@ -335,6 +336,7 @@ classification_rules:
   "Credit/Deposit": deposit
   "Credit Voucher": deposit
   "FNB App Payment From": deposit
+  "Inward Swift": deposit
   "Payment From": deposit
   "Magtape Credit": deposit
   "Paypal Withdrawal": deposit
@@ -342,6 +344,7 @@ classification_rules:
   "Rtc Credit": deposit
 
   # Other specific
+  "Github": other
   "Scaleway": other
   "Scw*": other
   "Google": other
