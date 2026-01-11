@@ -7,6 +7,46 @@
 
   $: hasTransactions = message.transactions?.length > 0;
 
+  // Extract budget info for progress bar
+  function extractBudgetInfo(content) {
+    if (!content) return null;
+
+    // Match patterns like "R8,000.00" for budget and "R8,615.00" for spent, "106%" for percentage
+    // Flexible pattern: "budget is R..." or "overall budget is R..."
+    const budgetMatch = content.match(/budget is (R[\d,\.]+)/i);
+    const spentMatch = content.match(/spent (R[\d,\.]+)/i);
+    const percentMatch = content.match(/\((\d+)% used\)/);
+
+    if (budgetMatch && spentMatch && percentMatch) {
+      const parseAmount = (str) => parseFloat(str.replace(/[R,]/g, ''));
+      return {
+        budget: parseAmount(budgetMatch[1]),
+        spent: parseAmount(spentMatch[1]),
+        percent: parseInt(percentMatch[1]),
+        budgetStr: budgetMatch[1],
+        spentStr: spentMatch[1]
+      };
+    }
+
+    // Also try to match "You've spent R... of R... budget" pattern
+    const altMatch = content.match(/spent (R[\d,\.]+).*?of (R[\d,\.]+) budget/i);
+    const altPercentMatch = content.match(/(\d+)%/);
+    if (altMatch && altPercentMatch) {
+      const parseAmount = (str) => parseFloat(str.replace(/[R,]/g, ''));
+      return {
+        budget: parseAmount(altMatch[2]),
+        spent: parseAmount(altMatch[1]),
+        percent: parseInt(altPercentMatch[1]),
+        budgetStr: altMatch[2],
+        spentStr: altMatch[1]
+      };
+    }
+
+    return null;
+  }
+
+  $: budgetInfo = extractBudgetInfo(message.content);
+
   // Format message content with colors for budget info
   function formatContent(content) {
     if (!content) return '';
@@ -67,6 +107,36 @@
     formatted = formatted.replace(/&gt;&gt;&gt;/g, '');
     formatted = formatted.replace(/&lt;&lt;&lt;/g, '');
 
+    // Format transaction lists into tables
+    // Match lists that follow a header line ending with ":"
+    const listPattern = /^(.*?:)\n((?:[-•] .+\n?|[A-Z].+\| R[\d,\.]+\n?)+)/gm;
+    formatted = formatted.replace(listPattern, (match, header, list) => {
+      const lines = list.trim().split('\n').filter(l => l.trim());
+      if (lines.length === 0) return match;
+
+      const rows = lines.map(line => {
+        // Pattern: "- 2025-11-03: Description - R1,000.00"
+        const dateDescAmtMatch = line.match(/^[-•] (\d{4}-\d{2}-\d{2}): (.+?) - (R[\d,\.]+)$/);
+        if (dateDescAmtMatch) {
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${dateDescAmtMatch[1]}</td><td class="py-2 pr-3">${dateDescAmtMatch[2]}</td><td class="py-2 text-right text-red-500 dark:text-red-400 font-medium">-${dateDescAmtMatch[3]}</td></tr>`;
+        }
+        // Pattern: "Description | R1,000.00" (no dash prefix)
+        const pipeMatch = line.match(/^(.+?) \| (R[\d,\.]+)$/);
+        if (pipeMatch) {
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3">${pipeMatch[1]}</td><td class="py-2 text-right text-red-500 dark:text-red-400 font-medium">-${pipeMatch[2]}</td></tr>`;
+        }
+        // Pattern: "- R1,000.00 (2025-11-03)"
+        const amtDateMatch = line.match(/^[-•] (R[\d,\.]+) \((\d{4}-\d{2}-\d{2})\)$/);
+        if (amtDateMatch) {
+          return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2 pr-3 text-gray-500 text-xs">${amtDateMatch[2]}</td><td class="py-2 text-right text-red-500 dark:text-red-400 font-medium">-${amtDateMatch[1]}</td></tr>`;
+        }
+        // Fallback: just show the line
+        return `<tr class="border-b border-gray-100 dark:border-gray-700"><td class="py-2" colspan="3">${line.replace(/^[-•] /, '')}</td></tr>`;
+      }).join('');
+
+      return `${header}<table class="mt-3 text-sm w-full"><tbody>${rows}</tbody></table>`;
+    });
+
     return formatted;
   }
 
@@ -83,6 +153,33 @@
   >
     <!-- Message content -->
     <div class="whitespace-pre-wrap">{@html formattedContent}</div>
+
+    <!-- Budget progress bar -->
+    {#if budgetInfo}
+      <div class="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div class="flex justify-between text-xs mb-1">
+          <span>Spent: {budgetInfo.spentStr}</span>
+          <span>Budget: {budgetInfo.budgetStr}</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+          <div
+            class="h-4 rounded-full transition-all duration-500 {budgetInfo.percent >= 100
+              ? 'bg-red-500'
+              : budgetInfo.percent >= 80
+                ? 'bg-yellow-500'
+                : 'bg-green-500'}"
+            style="width: {Math.min(budgetInfo.percent, 100)}%"
+          ></div>
+        </div>
+        <div class="text-center text-xs mt-1 font-medium {budgetInfo.percent >= 100
+          ? 'text-red-500'
+          : budgetInfo.percent >= 80
+            ? 'text-yellow-600 dark:text-yellow-400'
+            : 'text-green-500'}">
+          {budgetInfo.percent}% used
+        </div>
+      </div>
+    {/if}
 
     <!-- Transactions (for assistant messages) -->
     {#if hasTransactions}
