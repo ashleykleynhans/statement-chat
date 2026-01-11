@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { getBudgets, getBudgetSummary, createBudget, updateBudget, deleteBudget, getCategories, exportBudgets, importBudgets } from '../lib/api.js';
+  import { getBudgets, getBudgetSummary, createBudget, updateBudget, deleteBudget, getCategories, exportBudgets, importBudgets, deleteAllBudgets } from '../lib/api.js';
   import { formatCurrency } from '../lib/stores.js';
 
   let budgets = [];
@@ -21,6 +21,7 @@
   // Import/export state
   let importing = false;
   let exporting = false;
+  let clearing = false;
   let fileInput;
 
   onMount(async () => {
@@ -197,6 +198,22 @@
     }
   }
 
+  async function handleClearAll() {
+    if (!confirm(`Delete all ${budgets.length} budget(s)? This cannot be undone.`)) return;
+
+    clearing = true;
+    error = null;
+
+    try {
+      const result = await deleteAllBudgets();
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    } finally {
+      clearing = false;
+    }
+  }
+
   // Categories that don't have budgets yet
   $: availableCategories = categories.filter(
     cat => !budgets.find(b => b.category === cat)
@@ -244,6 +261,17 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
         {exporting ? 'Exporting...' : 'Export'}
+      </button>
+      <button
+        on:click={handleClearAll}
+        disabled={clearing || budgets.length === 0}
+        class="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-400 rounded-lg transition-colors disabled:opacity-50"
+        title="Delete all budgets"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        {clearing ? 'Clearing...' : 'Clear All'}
       </button>
     </div>
   </div>
