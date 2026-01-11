@@ -122,6 +122,7 @@ classification_rules:
   "Bank fee": fees
   "Service Fee": fees
   "Monthly Fee": fees
+  "Paypal Withdrawal Fee": fees
 
   # Garden Service
   "Garden Service": garden_service
@@ -192,6 +193,9 @@ classification_rules:
   " Dr ": medical
   "Doctor": medical
   "Hospital": medical
+  "Med Aid": medical
+  "Medihelp": medical
+  "Medicross": medical
   "Mediclinic": medical
   "Netcare": medical
   "Neurologist": medical
@@ -199,6 +203,7 @@ classification_rules:
   "Optom": medical
   "Optometrist": medical
   "Pharmacy": medical
+  "Tms Health Ins": medical
 
   # Municipal
   "Ekurhuleni": municipal
