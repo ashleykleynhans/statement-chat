@@ -672,7 +672,7 @@ class TestCmdReimport:
         pdf_file = tmp_path / "test.pdf"
         pdf_file.touch()
 
-        args = argparse.Namespace(file=str(pdf_file), bank=None)
+        args = argparse.Namespace(file=str(pdf_file), bank=None, all=False)
         cmd_reimport(args, mock_config)
 
         mock_reimport.assert_called_once()
@@ -681,7 +681,8 @@ class TestCmdReimport:
     @patch('src.main.Database')
     def test_reimport_file_not_found(self, mock_db, mock_classifier, mock_config, tmp_path):
         """Test reimport with non-existent file."""
-        args = argparse.Namespace(file=str(tmp_path / "nonexistent.pdf"), bank=None)
+        mock_classifier.return_value.check_connection.return_value = True
+        args = argparse.Namespace(file=str(tmp_path / "nonexistent.pdf"), bank=None, all=False)
 
         with pytest.raises(SystemExit) as exc:
             cmd_reimport(args, mock_config)
@@ -697,7 +698,7 @@ class TestCmdReimport:
         pdf_file = tmp_path / "test.pdf"
         pdf_file.touch()
 
-        args = argparse.Namespace(file=str(pdf_file), bank=None)
+        args = argparse.Namespace(file=str(pdf_file), bank=None, all=False)
 
         with pytest.raises(SystemExit) as exc:
             cmd_reimport(args, mock_config)
@@ -715,7 +716,7 @@ class TestCmdReimport:
         pdf_file = tmp_path / "test.pdf"
         pdf_file.touch()
 
-        args = argparse.Namespace(file=str(pdf_file), bank="standardbank")
+        args = argparse.Namespace(file=str(pdf_file), bank="standardbank", all=False)
         cmd_reimport(args, mock_config)
 
         call_kwargs = mock_reimport.call_args.kwargs
@@ -732,7 +733,75 @@ class TestCmdReimport:
         pdf_file = tmp_path / "test.pdf"
         pdf_file.touch()
 
-        args = argparse.Namespace(file=str(pdf_file), bank=None)
+        args = argparse.Namespace(file=str(pdf_file), bank=None, all=False)
+
+        with pytest.raises(SystemExit) as exc:
+            cmd_reimport(args, mock_config)
+
+        assert exc.value.code == 1
+
+    @patch('src.main.reimport_statement')
+    @patch('src.main.TransactionClassifier')
+    @patch('src.main.Database')
+    def test_reimport_all(self, mock_db, mock_classifier, mock_reimport, mock_config, tmp_path):
+        """Test reimport --all imports all PDF files."""
+        mock_classifier.return_value.check_connection.return_value = True
+        mock_reimport.return_value = True
+
+        # Create test PDF files
+        (tmp_path / "test1.pdf").touch()
+        (tmp_path / "test2.pdf").touch()
+        (tmp_path / "test3.pdf").touch()
+
+        # Update config to use tmp_path as statements dir
+        config = mock_config.copy()
+        config["paths"]["statements_dir"] = str(tmp_path)
+
+        args = argparse.Namespace(file=None, bank=None, all=True)
+        cmd_reimport(args, config)
+
+        # Should have called reimport_statement 3 times
+        assert mock_reimport.call_count == 3
+
+    @patch('src.main.TransactionClassifier')
+    @patch('src.main.Database')
+    def test_reimport_all_empty_directory(self, mock_db, mock_classifier, mock_config, tmp_path):
+        """Test reimport --all with no PDF files in directory."""
+        mock_classifier.return_value.check_connection.return_value = True
+
+        # Empty directory - no PDF files
+        config = mock_config.copy()
+        config["paths"]["statements_dir"] = str(tmp_path)
+
+        args = argparse.Namespace(file=None, bank=None, all=True)
+        cmd_reimport(args, config)  # Should return without error
+
+    @patch('src.main.reimport_statement')
+    @patch('src.main.TransactionClassifier')
+    @patch('src.main.Database')
+    def test_reimport_all_with_failures(self, mock_db, mock_classifier, mock_reimport, mock_config, tmp_path):
+        """Test reimport --all handles failed reimports."""
+        mock_classifier.return_value.check_connection.return_value = True
+        # First succeeds, second fails
+        mock_reimport.side_effect = [True, False]
+
+        # Create test PDF files
+        (tmp_path / "test1.pdf").touch()
+        (tmp_path / "test2.pdf").touch()
+
+        config = mock_config.copy()
+        config["paths"]["statements_dir"] = str(tmp_path)
+
+        args = argparse.Namespace(file=None, bank=None, all=True)
+        cmd_reimport(args, config)
+
+        assert mock_reimport.call_count == 2
+
+    @patch('src.main.TransactionClassifier')
+    @patch('src.main.Database')
+    def test_reimport_no_file_no_all(self, mock_db, mock_classifier, mock_config):
+        """Test reimport exits with error when no file and no --all."""
+        args = argparse.Namespace(file=None, bank=None, all=False)
 
         with pytest.raises(SystemExit) as exc:
             cmd_reimport(args, mock_config)

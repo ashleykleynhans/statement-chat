@@ -317,11 +317,10 @@ def cmd_rename(args: argparse.Namespace, config: dict) -> None:
 
 
 def cmd_reimport(args: argparse.Namespace, config: dict) -> None:
-    """Re-import a specific PDF statement (deletes existing and re-imports)."""
-    pdf_path = Path(args.file)
-
-    if not pdf_path.exists():
-        console.print(f"[red]File not found: {pdf_path}[/red]")
+    """Re-import PDF statement(s) (deletes existing and re-imports)."""
+    # Validate arguments
+    if not args.all and not args.file:
+        console.print("[red]Error: Must specify a file or use --all[/red]")
         sys.exit(1)
 
     bank = args.bank if args.bank else config["bank"]
@@ -343,21 +342,58 @@ def cmd_reimport(args: argparse.Namespace, config: dict) -> None:
         )
         sys.exit(1)
 
-    console.print(f"[dim]Re-importing: {pdf_path}[/dim]")
-    console.print(f"[dim]Using parser: {bank}[/dim]\n")
+    if args.all:
+        # Reimport all PDF files
+        statements_dir = Path(config["paths"]["statements_dir"])
+        pdf_files = sorted(statements_dir.glob("*.pdf"))
 
-    success = reimport_statement(
-        pdf_path=pdf_path,
-        db=db,
-        bank=bank,
-        classifier=classifier
-    )
+        if not pdf_files:
+            console.print(f"[yellow]No PDF files found in {statements_dir}[/yellow]")
+            return
 
-    if success:
-        console.print("\n[bold green]Re-import completed successfully[/bold green]")
+        console.print(f"[bold]Re-importing {len(pdf_files)} PDF files...[/bold]\n")
+
+        success_count = 0
+        fail_count = 0
+
+        for pdf_path in pdf_files:
+            console.print(f"[dim]Re-importing: {pdf_path.name}[/dim]")
+            success = reimport_statement(
+                pdf_path=pdf_path,
+                db=db,
+                bank=bank,
+                classifier=classifier
+            )
+            if success:
+                success_count += 1
+            else:
+                fail_count += 1
+                console.print(f"[red]Failed: {pdf_path.name}[/red]")
+
+        console.print(f"\n[bold]Summary: {success_count} succeeded, {fail_count} failed[/bold]")
     else:
-        console.print("\n[bold red]Re-import failed[/bold red]")
-        sys.exit(1)
+        # Reimport single file
+        pdf_path = Path(args.file)
+
+        if not pdf_path.exists():
+            console.print(f"[red]File not found: {pdf_path}[/red]")
+            sys.exit(1)
+
+        console.print(f"[dim]Re-importing: {pdf_path}[/dim]")
+        console.print(f"[dim]Using parser: {bank}[/dim]\n")
+
+        success = reimport_statement(
+            pdf_path=pdf_path,
+            db=db,
+            bank=bank,
+            classifier=classifier
+        )
+
+        if success:
+            console.print("\n[bold green]Re-import completed successfully[/bold green]")
+        else:
+            console.print("\n[bold red]Re-import failed[/bold red]")
+            sys.exit(1)
 
 
 def cmd_serve(args: argparse.Namespace, config: dict) -> None:
@@ -435,8 +471,9 @@ Examples:
     subparsers.add_parser("rename", help="Rename PDFs to {number}_{month}_{year}.pdf format")
 
     # Reimport command
-    reimport_parser = subparsers.add_parser("reimport", help="Re-import a specific PDF statement")
-    reimport_parser.add_argument("file", help="Path to the PDF file to re-import")
+    reimport_parser = subparsers.add_parser("reimport", help="Re-import PDF statement(s)")
+    reimport_parser.add_argument("file", nargs="?", help="Path to the PDF file to re-import")
+    reimport_parser.add_argument("--all", action="store_true", help="Re-import all PDF files in statements directory")
     reimport_parser.add_argument("--bank", help="Bank parser to use (overrides config)")
 
     # Serve command
