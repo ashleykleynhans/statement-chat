@@ -56,7 +56,8 @@ def cmd_import(args: argparse.Namespace, config: dict) -> None:
         statements_dir=statements_dir,
         db=db,
         bank=bank,
-        classifier=classifier
+        classifier=classifier,
+        pdf_password=config.get("pdf_password")
     )
 
     console.print(f"\n[bold]Imported {count} new statement(s)[/bold]")
@@ -84,7 +85,8 @@ def cmd_watch(args: argparse.Namespace, config: dict) -> None:
         statements_dir=config["paths"]["statements_dir"],
         db=db,
         bank=config["bank"],
-        classifier=classifier
+        classifier=classifier,
+        pdf_password=config.get("pdf_password")
     )
     watcher.start()
 
@@ -367,7 +369,8 @@ def cmd_reimport(args: argparse.Namespace, config: dict) -> None:
                 pdf_path=pdf_path,
                 db=db,
                 bank=bank,
-                classifier=classifier
+                classifier=classifier,
+                pdf_password=config.get("pdf_password")
             )
             if success:
                 success_count += 1
@@ -391,7 +394,8 @@ def cmd_reimport(args: argparse.Namespace, config: dict) -> None:
             pdf_path=pdf_path,
             db=db,
             bank=bank,
-            classifier=classifier
+            classifier=classifier,
+            pdf_password=config.get("pdf_password")
         )
 
         if success:

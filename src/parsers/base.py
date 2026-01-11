@@ -36,11 +36,12 @@ class BaseBankParser(ABC):
     """
 
     @abstractmethod
-    def parse(self, pdf_path: str | Path) -> StatementData:
+    def parse(self, pdf_path: str | Path, password: str | None = None) -> StatementData:
         """Parse a PDF statement and return extracted data.
 
         Args:
             pdf_path: Path to the PDF file to parse
+            password: Optional password for encrypted PDFs
 
         Returns:
             StatementData object with account info and transactions

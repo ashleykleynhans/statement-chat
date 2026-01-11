@@ -21,13 +21,15 @@ class StatementHandler(FileSystemEventHandler):
         db: Database,
         bank: str,
         classifier: TransactionClassifier,
-        console: Console | None = None
+        console: Console | None = None,
+        pdf_password: str | None = None
     ):
         self.db = db
         self.bank = bank
         self.classifier = classifier
         self.console = console or Console()
         self._parser = get_parser(bank)
+        self._pdf_password = pdf_password
 
     def on_created(self, event: FileCreatedEvent) -> None:
         """Handle file creation events."""
@@ -58,7 +60,7 @@ class StatementHandler(FileSystemEventHandler):
 
         try:
             # Parse the statement
-            statement_data = self._parser.parse(pdf_path)
+            statement_data = self._parser.parse(pdf_path, password=self._pdf_password)
 
             # Insert statement record
             statement_id = self.db.insert_statement(
@@ -109,7 +111,8 @@ class StatementWatcher:
         statements_dir: str | Path,
         db: Database,
         bank: str,
-        classifier: TransactionClassifier
+        classifier: TransactionClassifier,
+        pdf_password: str | None = None
     ):
         self.statements_dir = Path(statements_dir)
         self.db = db
@@ -117,6 +120,7 @@ class StatementWatcher:
         self.classifier = classifier
         self.console = Console()
         self._observer = None
+        self._pdf_password = pdf_password
 
     def start(self) -> None:
         """Start watching for new files."""
@@ -127,7 +131,8 @@ class StatementWatcher:
             db=self.db,
             bank=self.bank,
             classifier=self.classifier,
-            console=self.console
+            console=self.console,
+            pdf_password=self._pdf_password
         )
 
         self._observer = Observer()
@@ -157,7 +162,8 @@ def import_existing(
     statements_dir: str | Path,
     db: Database,
     bank: str,
-    classifier: TransactionClassifier
+    classifier: TransactionClassifier,
+    pdf_password: str | None = None
 ) -> int:
     """Import all existing PDF files in the statements directory.
 
@@ -199,7 +205,7 @@ def import_existing(
         console.print(f"[cyan]Processing {filename}...[/cyan]")
 
         try:
-            statement_data = parser.parse(pdf_path)
+            statement_data = parser.parse(pdf_path, password=pdf_password)
 
             statement_id = db.insert_statement(
                 filename=filename,
@@ -242,7 +248,8 @@ def reimport_statement(
     pdf_path: str | Path,
     db: Database,
     bank: str,
-    classifier: TransactionClassifier
+    classifier: TransactionClassifier,
+    pdf_password: str | None = None
 ) -> bool:
     """Re-import a specific PDF statement (delete existing and re-import).
 
@@ -266,7 +273,7 @@ def reimport_statement(
     console.print(f"[cyan]Processing {filename}...[/cyan]")
 
     try:
-        statement_data = parser.parse(pdf_path)
+        statement_data = parser.parse(pdf_path, password=pdf_password)
 
         statement_id = db.insert_statement(
             filename=filename,

@@ -22,7 +22,7 @@ class FNBParser(BaseBankParser):
     def bank_name(cls) -> str:
         return "fnb"
 
-    def parse(self, pdf_path: str | Path) -> StatementData:
+    def parse(self, pdf_path: str | Path, password: str | None = None) -> StatementData:
         """Parse an FNB statement PDF."""
         pdf_path = Path(pdf_path)
 
@@ -34,7 +34,7 @@ class FNBParser(BaseBankParser):
         statement_date = None
         full_text = ""
 
-        with pdfplumber.open(pdf_path) as pdf:
+        with pdfplumber.open(pdf_path, password=password) as pdf:
             for page in pdf.pages:
                 page_text = page.extract_text() or ""
                 full_text += page_text + "\n"
@@ -62,7 +62,7 @@ class FNBParser(BaseBankParser):
 
         # Use OCR to fill in missing descriptions (FNB uses special font for # descriptions)
         # Pass statement_date to determine the year for OCR date parsing
-        transactions = self._fill_missing_descriptions_with_ocr(pdf_path, transactions, statement_date)
+        transactions = self._fill_missing_descriptions_with_ocr(pdf_path, transactions, statement_date, password)
 
         return StatementData(
             account_number=account_number,
@@ -129,7 +129,7 @@ class FNBParser(BaseBankParser):
         return date_str
 
     def _fill_missing_descriptions_with_ocr(
-        self, pdf_path: Path, transactions: list[Transaction], statement_date: str | None = None
+        self, pdf_path: Path, transactions: list[Transaction], statement_date: str | None = None, password: str | None = None
     ) -> list[Transaction]:
         """Use OCR to fill in descriptions that couldn't be extracted.
 
@@ -155,7 +155,7 @@ class FNBParser(BaseBankParser):
                 pass
 
         # Extract descriptions via OCR
-        ocr_descriptions = self._extract_descriptions_via_ocr(pdf_path, year)
+        ocr_descriptions = self._extract_descriptions_via_ocr(pdf_path, year, password)
 
         # Match OCR descriptions to transactions by month-day and amount
         updated_transactions = []
@@ -177,7 +177,7 @@ class FNBParser(BaseBankParser):
 
         return updated_transactions
 
-    def _extract_descriptions_via_ocr(self, pdf_path: Path, year: int | None = None) -> dict[tuple, str]:
+    def _extract_descriptions_via_ocr(self, pdf_path: Path, year: int | None = None, password: str | None = None) -> dict[tuple, str]:
         """Extract transaction descriptions using OCR.
 
         Returns a dict mapping (date, amount) to description.
@@ -188,7 +188,7 @@ class FNBParser(BaseBankParser):
         descriptions = {}
 
         try:
-            doc = fitz.open(pdf_path)
+            doc = fitz.open(pdf_path, password=password)
             for page_num, page in enumerate(doc):
                 # Render page to image at 4x resolution for better OCR of small fonts
                 mat = fitz.Matrix(4, 4)

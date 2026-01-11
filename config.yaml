@@ -3,6 +3,9 @@
 # Bank configuration
 bank: fnb                    # Options: fnb (more to be added)
 
+# PDF password (if your bank statements are password-protected)
+# pdf_password: your_password_here
+
 # Ollama settings
 ollama:
   host: localhost
