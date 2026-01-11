@@ -114,6 +114,56 @@
   $: canGoBack = pageNum > 0;
   $: canGoForward = pageNum < totalPages - 1;
 
+  // Generate visible page numbers for pagination
+  // Shows: first, ..., pages around current, ..., last
+  $: visiblePages = (() => {
+    if (totalPages <= 7) {
+      // Show all pages if 7 or fewer
+      return Array.from({ length: totalPages }, (_, i) => i);
+    }
+
+    const pages = [];
+    const current = pageNum;
+
+    // Always show first page
+    pages.push(0);
+
+    // Calculate range around current page
+    let rangeStart = Math.max(1, current - 2);
+    let rangeEnd = Math.min(totalPages - 2, current + 2);
+
+    // Adjust range to always show 5 middle pages when possible
+    if (rangeEnd - rangeStart < 4) {
+      if (rangeStart === 1) {
+        rangeEnd = Math.min(totalPages - 2, rangeStart + 4);
+      } else if (rangeEnd === totalPages - 2) {
+        rangeStart = Math.max(1, rangeEnd - 4);
+      }
+    }
+
+    // Add ellipsis or page after first
+    if (rangeStart > 1) {
+      pages.push('...');
+    }
+
+    // Add range pages
+    for (let i = rangeStart; i <= rangeEnd; i++) {
+      pages.push(i);
+    }
+
+    // Add ellipsis or page before last
+    if (rangeEnd < totalPages - 2) {
+      pages.push('...');
+    }
+
+    // Always show last page
+    if (totalPages > 1) {
+      pages.push(totalPages - 1);
+    }
+
+    return pages;
+  })();
+
   onMount(async () => {
     await Promise.all([loadCategories(), loadStatements()]);
 
@@ -540,24 +590,69 @@
 
     <!-- Pagination -->
     {#if totalPages > 1 && !searchQuery && !hasActiveFilter()}
-      <div class="flex items-center justify-between mt-4">
-        <button
-          on:click={() => goToPage(pageNum - 1)}
-          disabled={!canGoBack}
-          class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Previous
-        </button>
-        <span class="text-sm text-gray-600 dark:text-gray-400">
+      <div class="flex flex-col sm:flex-row items-center justify-between mt-4 gap-3">
+        <span class="text-sm text-gray-600 dark:text-gray-400 order-2 sm:order-1">
           Page {pageNum + 1} of {totalPages}
         </span>
-        <button
-          on:click={() => goToPage(pageNum + 1)}
-          disabled={!canGoForward}
-          class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Next
-        </button>
+
+        <div class="flex items-center gap-1 order-1 sm:order-2">
+          <!-- First page -->
+          <button
+            on:click={() => goToPage(0)}
+            disabled={!canGoBack}
+            class="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="First page"
+          >
+            ««
+          </button>
+
+          <!-- Previous page -->
+          <button
+            on:click={() => goToPage(pageNum - 1)}
+            disabled={!canGoBack}
+            class="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Previous page"
+          >
+            «
+          </button>
+
+          <!-- Page numbers -->
+          {#each visiblePages as page}
+            {#if page === '...'}
+              <span class="px-2 py-1.5 text-sm text-gray-400 dark:text-gray-500">...</span>
+            {:else}
+              <button
+                on:click={() => goToPage(page)}
+                class="px-3 py-1.5 text-sm border rounded-lg transition-colors
+                  {page === pageNum
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}"
+              >
+                {page + 1}
+              </button>
+            {/if}
+          {/each}
+
+          <!-- Next page -->
+          <button
+            on:click={() => goToPage(pageNum + 1)}
+            disabled={!canGoForward}
+            class="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Next page"
+          >
+            »
+          </button>
+
+          <!-- Last page -->
+          <button
+            on:click={() => goToPage(totalPages - 1)}
+            disabled={!canGoForward}
+            class="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Last page"
+          >
+            »»
+          </button>
+        </div>
       </div>
     {/if}
   {/if}
