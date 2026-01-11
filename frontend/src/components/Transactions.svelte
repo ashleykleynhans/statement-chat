@@ -109,6 +109,7 @@
 
   const PAGE_SIZE = 20;
   let pageNum = 0;
+  let savedPageNum = 0;  // Remember page position before search/filter
 
   $: totalPages = Math.ceil(total / PAGE_SIZE);
   $: canGoBack = pageNum > 0;
@@ -213,10 +214,16 @@
 
   async function handleSearch() {
     if (!searchQuery.trim()) {
+      // Clearing search - restore previous page position
       selectedCategory = '';
-      pageNum = 0;
+      pageNum = savedPageNum;
       await loadTransactions();
       return;
+    }
+
+    // Save current page position before searching (only if not already searching)
+    if (!hasActiveFilter()) {
+      savedPageNum = pageNum;
     }
 
     loading = true;
@@ -398,14 +405,25 @@
     <!-- Row 1: Search and Category -->
     <div class="flex flex-col sm:flex-row gap-4">
       <!-- Search -->
-      <div class="flex-1">
+      <div class="flex-1 relative">
         <input
           type="text"
           bind:value={searchQuery}
           on:input={handleSearchInput}
           placeholder="Search transactions..."
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        {#if searchQuery}
+          <button
+            on:click={() => { searchQuery = ''; handleSearch(); }}
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            title="Clear search and return to previous page"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        {/if}
       </div>
 
       <!-- Category filter -->

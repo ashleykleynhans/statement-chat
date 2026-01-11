@@ -157,10 +157,11 @@ classification_rules:
   "Roof Repair": home_maintenance
   "The Pool Team": home_maintenance
 
-  # Import Duties
+    # Import Duties
   "Allport Cargo": import_duties
   "Buffalo Internation": import_duties
   "Linex Air Services": import_duties
+  "Purchase Allports": import_duties
 
   # Insurance (check before other)
   "Outsurance": insurance
@@ -236,7 +237,7 @@ classification_rules:
   "Ocean Basket": restaurants
   "Piatto": restaurants
   "Rock N Sole": restaurants
-  "Spur": restaurants
+  " Spur": restaurants
 
   # Reversals
   "#Rev Ewa": reversal          # Reversal of ewallet fee
@@ -268,6 +269,7 @@ classification_rules:
   "Typo": stationery
 
   # Subscriptions
+  "Anthropic": subscriptions
   "DSTV": subscriptions
   "Esp Eskomsep": subscriptions
   "Google One": subscriptions
@@ -337,6 +339,7 @@ classification_rules:
   "Magtape Credit": deposit
   "Paypal Withdrawal": deposit
   "Payshap Credit": deposit
+  "Rtc Credit": deposit
 
   # Other specific
   "Scaleway": other
