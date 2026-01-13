@@ -329,19 +329,44 @@ class ChatInterface:
         if not transactions or len(transactions) < 2:
             return None
 
-        # Sort by date and get unique amounts
-        sorted_txs = sorted(transactions, key=lambda x: x.get("date", ""))
-        amounts = [(tx.get("date", "")[:7], tx.get("amount", 0)) for tx in sorted_txs]
+        # Filter out fee transactions - they're not the actual subscription price
+        non_fee_txs = [tx for tx in transactions if tx.get("category") != "fees"]
+        if len(non_fee_txs) < 2:
+            return None
 
-        # Find where amount changed
+        # Sort by date
+        sorted_txs = sorted(non_fee_txs, key=lambda x: x.get("date", ""))
+
+        # Group by month and get the typical amount per month (first transaction)
+        # This handles cases where there might be multiple charges in a month
+        monthly_amounts = {}
+        for tx in sorted_txs:
+            month = tx.get("date", "")[:7]
+            amount = round(float(tx.get("amount", 0)), 2)  # Round to avoid float issues
+            if month and month not in monthly_amounts:
+                monthly_amounts[month] = amount
+
+        if len(monthly_amounts) < 2:
+            return None
+
+        # Sort months chronologically and find where amount changed
+        sorted_months = sorted(monthly_amounts.keys())
+        prev_month = None
         prev_amount = None
-        for i, (month, amount) in enumerate(amounts):
-            if prev_amount is not None and amount != prev_amount:
+
+        for month in sorted_months:
+            amount = monthly_amounts[month]
+            if prev_amount is not None and abs(amount - prev_amount) > 0.01:
+                # Convert YYYY-MM to human readable format (e.g., "September 2025")
+                from datetime import datetime
+                month_date = datetime.strptime(month, "%Y-%m")
+                month_name = month_date.strftime("%B %Y")
                 # Found a change - determine if increase or decrease
                 if amount > prev_amount:
-                    return f"PRICE INCREASED in {month} from R{prev_amount:.2f} to R{amount:.2f}"
+                    return f"PRICE INCREASED in {month_name} from R{prev_amount:.2f} to R{amount:.2f}"
                 else:
-                    return f"PRICE DECREASED in {month} from R{prev_amount:.2f} to R{amount:.2f}"
+                    return f"PRICE DECREASED in {month_name} from R{prev_amount:.2f} to R{amount:.2f}"
+            prev_month = month
             prev_amount = amount
 
         return None
@@ -478,8 +503,10 @@ When answering questions about spending or transactions:
 - NEVER use (x2), (x3), "twice", etc - NEVER combine multiple amounts on one line
 
 For price change/increase questions:
-- Context will contain ">>> PRICE INCREASED in YYYY-MM from RX to RY <<<"
-- Just copy this info into a natural response, e.g. "The price increased in September 2025 from R99.99 to R119.99"
+- Context will contain ">>> PRICE INCREASED in YYYY-MM from R[amount1] to R[amount2] <<<"
+- Copy the EXACT month and amounts from the context into a natural response
+- If context says "NO PRICE CHANGE DETECTED", respond that the price stayed the same
+- NEVER make up amounts - only use the exact values from the context
 
 For budget questions:
 - If asked about a SPECIFIC category (e.g. "medical budget", "groceries budget"):

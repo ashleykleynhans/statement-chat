@@ -51,8 +51,8 @@
   function getSpendingChartData(transactions) {
     if (!transactions || transactions.length < 3) return null;
 
-    // Only include debits for spending chart
-    const debits = transactions.filter(tx => tx.transaction_type === 'debit');
+    // Only include debits for spending chart, exclude fees
+    const debits = transactions.filter(tx => tx.transaction_type === 'debit' && tx.category !== 'fees');
     if (debits.length < 3) return null;
 
     // Group by month
