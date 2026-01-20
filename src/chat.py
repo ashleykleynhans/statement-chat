@@ -473,7 +473,7 @@ Query: {query}"""
         monthly_amounts = {}
         for tx in sorted_txs:
             month = tx.get("date", "")[:7]
-            # Use abs() since debits are stored as negative values
+            # Use abs() in case debits are stored as negative values
             amount = round(abs(float(tx.get("amount", 0))), 2)
             if month and month not in monthly_amounts:
                 monthly_amounts[month] = amount
@@ -799,6 +799,25 @@ Answer concisely and directly."""
 
         return None
 
+    def _extract_merchant_name(self, transactions: list[dict]) -> str:
+        """Extract a clean merchant name from transactions."""
+        if not transactions:
+            return "this service"
+        # Get the first transaction's description and extract merchant name
+        desc = transactions[0].get("description", "")
+        # Common patterns: "POS Purchase Netflix.Com", "Spotify Premium", etc.
+        # Try to extract the key part
+        desc_lower = desc.lower()
+        for keyword in ["netflix", "spotify", "youtube", "apple", "google", "amazon", "disney"]:
+            if keyword in desc_lower:
+                return keyword.capitalize()
+        # Fall back to first meaningful word
+        words = desc.split()
+        for word in words:
+            if len(word) > 3 and word.lower() not in ["purchase", "payment", "pos", "debit"]:
+                return word.strip(".,")
+        return "this service"
+
     def ask(self, query: str) -> tuple[str, list[dict]]:
         """Single query method for non-interactive use.
 
@@ -828,6 +847,41 @@ Answer concisely and directly."""
             relevant_transactions = self._find_relevant_transactions(query)
             self._last_transactions = relevant_transactions
             self._last_search_query = query
+
+        # For price change queries, bypass LLM and return deterministic response
+        query_lower = query.lower()
+        is_price_change_query = "price" in query_lower and (
+            "increase" in query_lower or "change" in query_lower or
+            "go up" in query_lower or "went up" in query_lower
+        )
+        if is_price_change_query and relevant_transactions:
+            price_change = self._detect_price_change(relevant_transactions)
+            merchant = self._extract_merchant_name(relevant_transactions)
+            if price_change:
+                # Extract details from price_change string: "PRICE INCREASED in June 2025 from R199.00 to R229.00"
+                if "INCREASED" in price_change:
+                    # Parse: "PRICE INCREASED in Month Year from R X to R Y"
+                    import re
+                    match = re.search(r"in (.+?) from R([\d.]+) to R([\d.]+)", price_change)
+                    if match:
+                        month = match.group(1)
+                        old_price = match.group(2)
+                        new_price = match.group(3)
+                        response = f"Your {merchant} price increased in {month} from R{old_price} to R{new_price}."
+                        return response, relevant_transactions
+                elif "DECREASED" in price_change:
+                    import re
+                    match = re.search(r"in (.+?) from R([\d.]+) to R([\d.]+)", price_change)
+                    if match:
+                        month = match.group(1)
+                        old_price = match.group(2)
+                        new_price = match.group(3)
+                        response = f"Your {merchant} price decreased in {month} from R{old_price} to R{new_price}."
+                        return response, relevant_transactions
+            else:
+                # No price change detected
+                response = f"Your {merchant} price has stayed the same."
+                return response, relevant_transactions
 
         context = self._build_context(relevant_transactions, query)
         response = self._get_llm_response(query, context)

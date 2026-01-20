@@ -346,26 +346,58 @@ class TestPriceChangeDetection:
         chat._client.chat.completions.create.return_value = mock_openai_response("Metaflix -> Netflix")
 
         mock_db.search_transactions.return_value = [
-            {"date": "2025-01-22", "description": "Netflix.com", "amount": -199.00,
+            {"date": "2025-01-22", "description": "Netflix.com", "amount": 199.00,
              "category": "subscriptions", "transaction_type": "debit"},
-            {"date": "2025-02-22", "description": "Netflix.com", "amount": -199.00,
+            {"date": "2025-02-22", "description": "Netflix.com", "amount": 199.00,
              "category": "subscriptions", "transaction_type": "debit"},
-            {"date": "2025-06-22", "description": "Netflix.com", "amount": -229.00,
+            {"date": "2025-06-22", "description": "Netflix.com", "amount": 229.00,
              "category": "subscriptions", "transaction_type": "debit"},
-            {"date": "2025-07-22", "description": "Netflix.com", "amount": -229.00,
+            {"date": "2025-07-22", "description": "Netflix.com", "amount": 229.00,
              "category": "subscriptions", "transaction_type": "debit"},
         ]
 
         response, transactions = chat.ask("When did the Metaflix price increase?")
 
+        # Response should be deterministic (bypasses LLM)
+        assert "Netflix" in response
+        assert "increased" in response
+        assert "June 2025" in response
+        assert "199" in response
+        assert "229" in response
         assert len(transactions) == 4
-        # Price change should be detected in the context building
-        price_change = chat._detect_price_change(transactions)
-        assert price_change is not None
-        assert "INCREASED" in price_change
-        assert "June 2025" in price_change
-        assert "199" in price_change
-        assert "229" in price_change
+
+    def test_price_change_bypasses_llm(self, chat, mock_db):
+        """Price change queries should return deterministic response without LLM."""
+        mock_db.search_transactions.return_value = [
+            {"date": "2025-01-22", "description": "Spotify Premium", "amount": 99.99,
+             "category": "subscriptions", "transaction_type": "debit"},
+            {"date": "2025-06-22", "description": "Spotify Premium", "amount": 119.99,
+             "category": "subscriptions", "transaction_type": "debit"},
+        ]
+
+        # LLM should not be called for the response (only for search term extraction)
+        response, transactions = chat.ask("When did spotify price increase?")
+
+        # Response format is deterministic
+        assert "Spotify" in response
+        assert "increased" in response
+        assert "June 2025" in response
+        assert "99.99" in response
+        assert "119.99" in response
+
+    def test_price_no_change_deterministic(self, chat, mock_db):
+        """No price change should return deterministic 'stayed the same' response."""
+        mock_db.search_transactions.return_value = [
+            {"date": "2025-01-22", "description": "Netflix.com", "amount": 199.00,
+             "category": "subscriptions", "transaction_type": "debit"},
+            {"date": "2025-06-22", "description": "Netflix.com", "amount": 199.00,
+             "category": "subscriptions", "transaction_type": "debit"},
+        ]
+
+        response, transactions = chat.ask("When did netflix price change?")
+
+        assert "stayed the same" in response
+        assert "Netflix" in response
 
     def test_price_change_uses_absolute_values(self, chat):
         """Price change detection should work with negative debit amounts."""
@@ -380,3 +412,72 @@ class TestPriceChangeDetection:
         assert "INCREASED" in result
         assert "199" in result
         assert "229" in result
+
+
+class TestMerchantNameExtraction:
+    """Test merchant name extraction from transactions."""
+
+    def test_extract_netflix(self, chat):
+        """Should extract 'Netflix' from transaction description."""
+        transactions = [{"description": "POS Purchase Netflix.Com 400738*9154"}]
+        assert chat._extract_merchant_name(transactions) == "Netflix"
+
+    def test_extract_spotify(self, chat):
+        """Should extract 'Spotify' from transaction description."""
+        transactions = [{"description": "Spotify Premium Monthly"}]
+        assert chat._extract_merchant_name(transactions) == "Spotify"
+
+    def test_extract_unknown_merchant(self, chat):
+        """Should extract first meaningful word for unknown merchants."""
+        transactions = [{"description": "ACME Corporation Payment"}]
+        assert chat._extract_merchant_name(transactions) == "ACME"
+
+    def test_empty_transactions(self, chat):
+        """Should return default for empty transactions."""
+        assert chat._extract_merchant_name([]) == "this service"
+
+    def test_all_excluded_words_returns_default(self, chat):
+        """Should return 'this service' when all words are excluded or short."""
+        # All words are either short (<=3 chars) or in excluded list
+        transactions = [{"description": "POS Purchase Payment"}]
+        assert chat._extract_merchant_name(transactions) == "this service"
+
+    def test_only_short_words_returns_default(self, chat):
+        """Should return 'this service' when all words are too short."""
+        transactions = [{"description": "A to B"}]
+        assert chat._extract_merchant_name(transactions) == "this service"
+
+
+class TestPriceDecrease:
+    """Test price decrease detection and response."""
+
+    def test_price_decrease_detected(self, chat, mock_db):
+        """Price decrease should return deterministic response."""
+        mock_db.search_transactions.return_value = [
+            {"date": "2025-01-22", "description": "Netflix.com", "amount": 229.00,
+             "category": "subscriptions", "transaction_type": "debit"},
+            {"date": "2025-06-22", "description": "Netflix.com", "amount": 199.00,
+             "category": "subscriptions", "transaction_type": "debit"},
+        ]
+
+        response, transactions = chat.ask("When did netflix price change?")
+
+        assert "Netflix" in response
+        assert "decreased" in response
+        assert "June 2025" in response
+        assert "229" in response
+        assert "199" in response
+
+    def test_price_decrease_detection_function(self, chat):
+        """_detect_price_change should detect price decreases."""
+        transactions = [
+            {"date": "2025-01-22", "amount": 229.00, "category": "subscriptions"},
+            {"date": "2025-06-22", "amount": 199.00, "category": "subscriptions"},
+        ]
+
+        result = chat._detect_price_change(transactions)
+
+        assert result is not None
+        assert "DECREASED" in result
+        assert "229" in result
+        assert "199" in result
