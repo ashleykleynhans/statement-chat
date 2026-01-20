@@ -625,6 +625,9 @@ For greetings (hi, hello, hey, etc.), respond with a friendly greeting and offer
 
 When answering questions about spending or transactions:
 - Give a concise summary with the total amount
+- For yes/no questions like "Did I pay X?", include the date and amount: "Yes, you paid Paul R500.00 on 15 January 2025."
+- Always format dates as "15 January 2025" (day month year), NEVER as "2025-01-15"
+- For single transactions, always mention the date and amount
 - Use the specific name/term from the user's question (e.g. "Chanel Smith", "Spotify", "groceries") - NEVER say "various recipients"
 - The context shows ">>> X PAYMENTS TOTALING: R27,030.98 <<<" - COPY this amount EXACTLY including the cents
 - NEVER round! R27,030.98 must stay R27,030.98, NOT R27,031.00
