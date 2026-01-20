@@ -814,6 +814,67 @@ class TestFindRelevantTransactionsExtended:
             assert len(result) == 2
 
 
+class TestDescriptionFilterSynonyms:
+    """Tests for description filter synonyms (e.g., roof -> home_maintenance with filtering)."""
+
+    def test_roof_query_matches_home_maintenance_category(self, mock_db):
+        """Test 'roof' query matches home_maintenance category and filters by description."""
+        # Set up mock to return home_maintenance transactions
+        mock_db.get_all_categories.return_value = ["home_maintenance", "groceries", "fuel"]
+        home_maintenance_transactions = [
+            {"description": "Roof repairs", "amount": 5000, "category": "home_maintenance"},
+            {"description": "Pool cleaning", "amount": 800, "category": "home_maintenance"},
+            {"description": "Ceiling fix", "amount": 1200, "category": "home_maintenance"},
+        ]
+        mock_db.get_transactions_by_category.return_value = home_maintenance_transactions
+
+        with patch('src.chat.OpenAI'):
+            chat = ChatInterface(mock_db)
+            result = chat._find_relevant_transactions("roof repairs")
+
+            # Should call get_transactions_by_category with home_maintenance
+            mock_db.get_transactions_by_category.assert_called_with("home_maintenance")
+            # Should filter to only roof-related transactions
+            assert len(result) == 1
+            assert "roof" in result[0]["description"].lower()
+
+    def test_pool_query_filters_home_maintenance(self, mock_db):
+        """Test 'pool' query matches home_maintenance but filters by pool in description."""
+        mock_db.get_all_categories.return_value = ["home_maintenance", "groceries"]
+        home_maintenance_transactions = [
+            {"description": "Roof repairs", "amount": 5000, "category": "home_maintenance"},
+            {"description": "Pool service", "amount": 800, "category": "home_maintenance"},
+            {"description": "Pool pump repair", "amount": 1500, "category": "home_maintenance"},
+        ]
+        mock_db.get_transactions_by_category.return_value = home_maintenance_transactions
+
+        with patch('src.chat.OpenAI'):
+            chat = ChatInterface(mock_db)
+            result = chat._find_relevant_transactions("pool expenses")
+
+            # Should filter to only pool-related transactions
+            assert len(result) == 2
+            assert all("pool" in tx["description"].lower() for tx in result)
+
+    def test_electrician_query_filters_home_maintenance(self, mock_db):
+        """Test 'electrician' query matches home_maintenance and filters correctly."""
+        mock_db.get_all_categories.return_value = ["home_maintenance", "groceries"]
+        home_maintenance_transactions = [
+            {"description": "Electrician callout", "amount": 500, "category": "home_maintenance"},
+            {"description": "Plumber repair", "amount": 800, "category": "home_maintenance"},
+            {"description": "Roof repairs", "amount": 5000, "category": "home_maintenance"},
+        ]
+        mock_db.get_transactions_by_category.return_value = home_maintenance_transactions
+
+        with patch('src.chat.OpenAI'):
+            chat = ChatInterface(mock_db)
+            result = chat._find_relevant_transactions("electrician costs")
+
+            # Should filter to only electrician-related transactions
+            assert len(result) == 1
+            assert "electrician" in result[0]["description"].lower()
+
+
 class TestFollowUpDetection:
     """Tests for follow-up query detection."""
 
@@ -883,6 +944,17 @@ class TestFollowUpDetection:
             # "Did I pay Paul?" should trigger a new search, not be a follow-up
             assert chat._is_follow_up_query("Did I pay Paul?") is False
             assert chat._is_follow_up_query("Have I paid John?") is False
+
+    def test_proper_noun_query_not_follow_up(self, mock_db):
+        """Test queries with proper nouns (names) are not follow-ups."""
+        with patch('src.chat.OpenAI'):
+            chat = ChatInterface(mock_db)
+            # "Chanel Smith payments" should trigger a new search, not be a follow-up
+            assert chat._is_follow_up_query("Chanel Smith payments") is False
+            assert chat._is_follow_up_query("List Chanel Smith payments") is False
+            # Single proper noun should also work
+            assert chat._is_follow_up_query("Netflix history") is False
+            assert chat._is_follow_up_query("Woolworths total") is False
 
 
 class TestFollowUpContext:

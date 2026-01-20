@@ -148,6 +148,18 @@ class ChatInterface:
         if re.search(r"\bpay\s+[A-Z][a-z]+", query) or re.search(r"\bpaid\s+[A-Z][a-z]+", query):
             has_specific_keywords = True
 
+        # Proper nouns (capitalized names like "Chanel Smith" or "Netflix") are specific queries
+        # Find all capitalized words and filter out common sentence starters
+        common_starters = {
+            "show", "list", "find", "when", "what", "how", "did", "have", "where",
+            "who", "why", "is", "are", "can", "the", "a", "an", "i", "my", "hi",
+            "hello", "hey", "please", "could", "would", "tell", "give", "get",
+        }
+        capitalized_words = re.findall(r'\b[A-Z][a-z]+\b', query)
+        proper_nouns = [w for w in capitalized_words if w.lower() not in common_starters]
+        if proper_nouns:
+            has_specific_keywords = True
+
         # Check if query mentions any category name
         if not has_specific_keywords:
             categories = self.db.get_all_categories()
@@ -219,6 +231,7 @@ class ChatInterface:
             return limit_if_when_last(doctor_transactions)
 
         # Check for category keywords (with common synonyms)
+        # These synonyms map to a category but should also filter by description
         category_synonyms = {
             "saved": "savings",
             "save": "savings",
@@ -228,9 +241,31 @@ class ChatInterface:
             "flowers": "florist",
             "flower": "florist",
         }
+        # These synonyms map to a category but need description filtering
+        # (multiple things map to same category, e.g., roof/ceiling/pool → home_maintenance)
+        description_filter_synonyms = {
+            "roof": "home_maintenance",
+            "ceiling": "home_maintenance",
+            "electrician": "home_maintenance",
+            "plumber": "home_maintenance",
+            "garage": "home_maintenance",
+            "pool": "home_maintenance",
+            "fence": "home_maintenance",
+        }
+
+        # Track if we need to filter by description term
+        description_filter_term = None
+        for synonym, category in description_filter_synonyms.items():
+            if synonym in query_lower:
+                description_filter_term = synonym
+                break
+
         # Expand query with synonyms
         expanded_query = query_lower
         for synonym, category in category_synonyms.items():
+            if synonym in query_lower:
+                expanded_query += f" {category}"
+        for synonym, category in description_filter_synonyms.items():
             if synonym in query_lower:
                 expanded_query += f" {category}"
 
@@ -254,6 +289,13 @@ class ChatInterface:
                 # General budget question - don't show transactions
                 return []
 
+        # Helper to filter by description term if needed
+        def filter_by_description(transactions):
+            if description_filter_term:
+                return [tx for tx in transactions
+                        if description_filter_term in tx.get("description", "").lower()]
+            return transactions
+
         # If we have both date range and category, filter by both
         if date_start and date_end and matched_category:
             all_in_range = self.db.get_transactions_in_date_range(
@@ -261,11 +303,12 @@ class ChatInterface:
                 date_end.strftime("%Y-%m-%d")
             )
             filtered = [tx for tx in all_in_range if tx.get("category") == matched_category]
-            return limit_if_when_last(filtered)
+            return limit_if_when_last(filter_by_description(filtered))
 
         # If only category specified
         if matched_category:
-            return limit_if_when_last(self.db.get_transactions_by_category(matched_category))
+            transactions = self.db.get_transactions_by_category(matched_category)
+            return limit_if_when_last(filter_by_description(transactions))
 
         # If only date range specified
         if date_start and date_end:
