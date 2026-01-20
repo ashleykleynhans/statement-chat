@@ -473,7 +473,8 @@ Query: {query}"""
         monthly_amounts = {}
         for tx in sorted_txs:
             month = tx.get("date", "")[:7]
-            amount = round(float(tx.get("amount", 0)), 2)  # Round to avoid float issues
+            # Use abs() since debits are stored as negative values
+            amount = round(abs(float(tx.get("amount", 0))), 2)
             if month and month not in monthly_amounts:
                 monthly_amounts[month] = amount
 
