@@ -12,6 +12,21 @@ from rich.table import Table
 from .database import Database
 
 
+def _edit_distance(a: str, b: str) -> int:
+    """Compute Levenshtein edit distance between two strings."""
+    if len(a) < len(b):
+        return _edit_distance(b, a)
+    if len(b) == 0:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a):
+        curr = [i + 1]
+        for j, cb in enumerate(b):
+            curr.append(min(prev[j + 1] + 1, curr[j] + 1, prev[j] + (ca != cb)))
+        prev = curr
+    return prev[-1]
+
+
 class ChatInterface:
     """Interactive chat interface for querying bank transactions."""
 
@@ -339,6 +354,7 @@ class ChatInterface:
         capitalized_words = re.findall(r'\b[A-Z][a-z]+\b', query)
         proper_nouns = [w for w in capitalized_words if w.lower() not in common_starters]
         # Also recognize known brand names typed in lowercase (e.g., "spotify")
+        # or with typos (e.g., "sportify" -> "spotify")
         known_brands = {
             "netflix", "spotify", "youtube", "apple", "google", "amazon",
             "disney", "dstv", "showmax", "anthropic", "microsoft",
@@ -346,6 +362,12 @@ class ChatInterface:
         for word in re.findall(r'\b\w+\b', query_lower):
             if word in known_brands and word.capitalize() not in proper_nouns:
                 proper_nouns.append(word.capitalize())
+            elif len(word) >= 4 and word not in common_starters:
+                # Fuzzy match: catch typos like "sportify" -> "spotify"
+                for brand in known_brands:
+                    if abs(len(word) - len(brand)) <= 1 and _edit_distance(word, brand) <= 2:
+                        proper_nouns.append(brand.capitalize())
+                        break
         if len(proper_nouns) >= 2:
             # Search for the full proper noun phrase (e.g., "Chanel Smith")
             full_name = " ".join(proper_nouns).lower()

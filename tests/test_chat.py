@@ -4,8 +4,35 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime, timedelta
 
-from src.chat import ChatInterface
+from src.chat import ChatInterface, _edit_distance
 from src.database import Database
+
+
+class TestEditDistance:
+    """Tests for _edit_distance helper."""
+
+    def test_empty_string(self):
+        """Comparing a non-empty string against empty returns its length."""
+        assert _edit_distance("spotify", "") == 7
+
+    def test_both_empty(self):
+        """Two empty strings have zero distance."""
+        assert _edit_distance("", "") == 0
+
+    def test_identical(self):
+        assert _edit_distance("spotify", "spotify") == 0
+
+    def test_single_insertion(self):
+        """'sportify' -> 'spotify' is distance 1 (delete 'r')."""
+        assert _edit_distance("sportify", "spotify") == 1
+
+    def test_single_substitution(self):
+        assert _edit_distance("netflex", "netflix") == 1
+
+    def test_swap_order(self):
+        """Distance is symmetric."""
+        assert _edit_distance("", "abc") == 3
+        assert _edit_distance("abc", "") == 3
 
 
 def mock_openai_response(content: str) -> Mock:
