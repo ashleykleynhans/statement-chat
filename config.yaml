@@ -85,8 +85,11 @@ classification_rules:
   "Cash Withdrawal": withdrawal
 
   # Fees
+  "AccountFee": fees
+  "AddedServFees": fees
   "Bank fee": fees
   "Fees PymtFee": fees
+  "Fees": fees
   "Service Fee": fees
   "Monthly Fee": fees
   "Paypal Withdrawal Fee": fees
@@ -104,6 +107,7 @@ classification_rules:
   "Rtc Credit": deposit
 
   # Airtime
+  "Airtime Topup": airtime
   "Prepaid Airtime": airtime
 
   # Cellphone
@@ -378,6 +382,9 @@ classification_rules:
   "Tracker": vehicle_tracking
   "Netstar": vehicle_tracking
 
+  # Fuel
+  "Fuel Purchase": fuel
+
   # Vehicle Maintenance
   "Associated Motor": vehicle_maintenance
   "Alberton Tyre": vehicle_maintenance
@@ -412,6 +419,7 @@ classification_rules:
   # EFT Payments - catch-all for unmatched EFT payments (keep before POS)
   "FNB App Payment To": eft_payment
   "Internet Pmt To": eft_payment
+  "Magtape Debit": eft_payment
 
   # POS Purchases - catch-all for unmatched POS transactions (keep at end)
   "POS Purchase": other
