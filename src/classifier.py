@@ -119,10 +119,14 @@ Rules:
             response = self._client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
+                temperature=0.1,
+                max_tokens=200,
             )
 
-            return self._parse_response(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            # Strip reasoning model thinking tags
+            content = re.sub(r'<think>.*?</think>\s*', '', content, flags=re.DOTALL)
+            return self._parse_response(content)
         except Exception as e:
             # Return default classification on error
             return ClassificationResult(
@@ -200,10 +204,14 @@ Rules:
             response = self._client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
+                temperature=0.1,
+                max_tokens=100 * len(batch),
             )
 
-            return self._parse_batch_response(response.choices[0].message.content, len(batch))
+            content = response.choices[0].message.content
+            # Strip reasoning model thinking tags
+            content = re.sub(r'<think>.*?</think>\s*', '', content, flags=re.DOTALL)
+            return self._parse_batch_response(content, len(batch))
         except Exception:
             return [
                 ClassificationResult(category="other", recipient_or_payer=None, confidence="low")
