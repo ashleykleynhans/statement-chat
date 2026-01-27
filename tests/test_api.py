@@ -822,6 +822,122 @@ class TestWebSocketChat:
             ask_release.set()  # Clean up the blocked thread
             mock_manager.remove_session.assert_called_with("test-session-id")
 
+    def test_websocket_invalid_text_during_chat(self, client, mock_db, mock_config):
+        """Test sending invalid (non-JSON) text while chat is processing."""
+        import threading
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                ask_release.wait(timeout=5)
+                return ("Response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Hello"}
+                })
+                # Send invalid text while ask is blocking;
+                # json.loads fails → except Exception: continue (lines 175-176)
+                websocket.send_text("not valid json")
+
+                # Let ask complete — response should still arrive
+                ask_release.set()
+
+                response = websocket.receive_json()
+                assert response["type"] == "chat_response"
+                assert response["payload"]["message"] == "Response"
+
+    def test_websocket_cancel_cleanup_with_failed_task(self, client, mock_db, mock_config):
+        """Test cleanup when the cancelled task raised an exception."""
+        import threading
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            call_count = 0
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    ask_release.wait(timeout=5)
+                    raise RuntimeError("LLM connection failed")
+                return ("Second response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                # First chat (blocks, then raises)
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "First"}
+                })
+                websocket.send_json({"type": "cancel"})
+                response = websocket.receive_json()
+                assert response["type"] == "cancelled"
+
+                # Send second chat while first task is pending;
+                # await pending_cancel_task raises RuntimeError →
+                # except Exception: pass (line 128)
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Second"}
+                })
+                ask_release.set()
+
+                response = websocket.receive_json()
+                assert response["type"] == "chat_response"
+                assert response["payload"]["message"] == "Second response"
+
+    def test_websocket_disconnect_during_chat(self, client, mock_db, mock_config):
+        """Test disconnect while chat is processing (no cancel sent)."""
+        import threading
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                ask_release.wait(timeout=5)
+                return ("Response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Hello"}
+                })
+                # Disconnect while ask is blocking — recv_task raises
+                # WebSocketDisconnect → except WebSocketDisconnect: raise
+                # (lines 173-174)
+                threading.Timer(0.1, ask_release.set).start()
+
+        mock_manager.remove_session.assert_called_with("test-session-id")
+
 
 class TestLifespan:
     """Tests for application lifespan."""
