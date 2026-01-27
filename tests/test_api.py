@@ -817,9 +817,12 @@ class TestWebSocketChat:
                 response = websocket.receive_json()
                 assert response["type"] == "cancelled"
 
+                # Release the thread before disconnect so the finally
+                # block's await pending_cancel_task doesn't block.
+                threading.Timer(0.1, ask_release.set).start()
+
             # Disconnect happened with pending cancel task still running;
             # finally block (lines 243-246) cancels and awaits the task
-            ask_release.set()  # Clean up the blocked thread
             mock_manager.remove_session.assert_called_with("test-session-id")
 
     def test_websocket_invalid_text_during_chat(self, client, mock_db, mock_config):
