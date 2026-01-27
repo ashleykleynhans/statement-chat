@@ -228,8 +228,9 @@
       return `${header}<table class="mt-3 text-sm w-full"><tbody>${rows}</tbody></table>`;
     });
 
-    // Convert markdown bold (**text**) to HTML
+    // Convert markdown bold (**text**) to HTML, then italic (*text*)
     formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
     return formatted;
   }
