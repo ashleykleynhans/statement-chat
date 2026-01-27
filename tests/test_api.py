@@ -469,6 +469,7 @@ class TestWebSocketChat:
         with patch('src.api.routers.chat.session_manager') as mock_manager:
             mock_session = Mock()
             mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
             # ask() returns (response_text, transactions, llm_stats) tuple
             mock_session.chat_interface.ask.return_value = ("Test response", [], None)
             mock_manager.create_session.return_value = mock_session
@@ -493,6 +494,7 @@ class TestWebSocketChat:
         with patch('src.api.routers.chat.session_manager') as mock_manager:
             mock_session = Mock()
             mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
             # Return LLM stats in the response
             llm_stats = {
                 "completion_tokens": 50,
@@ -583,6 +585,7 @@ class TestWebSocketChat:
         with patch('src.api.routers.chat.session_manager') as mock_manager:
             mock_session = Mock()
             mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
             mock_session.chat_interface.ask.side_effect = Exception("Ollama error")
             mock_manager.create_session.return_value = mock_session
 
@@ -612,6 +615,211 @@ class TestWebSocketChat:
                 websocket.receive_json()
 
             # After disconnect, session should be removed
+            mock_manager.remove_session.assert_called_with("test-session-id")
+
+    def test_websocket_cancel_during_chat(self, client, mock_db, mock_config):
+        """Test cancelling an in-progress chat request."""
+        import threading
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                ask_release.wait(timeout=5)
+                return ("Response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                # Send chat (ask blocks in background thread)
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Hello"}
+                })
+                # Send cancel while ask is still running
+                websocket.send_json({"type": "cancel"})
+
+                response = websocket.receive_json()
+                assert response["type"] == "cancelled"
+
+                ask_release.set()
+
+    def test_websocket_ping_during_chat(self, client, mock_db, mock_config):
+        """Test sending ping while chat is processing."""
+        import threading
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                ask_release.wait(timeout=5)
+                return ("Response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Hello"}
+                })
+                # Send ping while ask is blocking
+                websocket.send_json({"type": "ping"})
+
+                response = websocket.receive_json()
+                assert response["type"] == "pong"
+
+                # Let ask complete and verify the response still arrives
+                ask_release.set()
+
+                response = websocket.receive_json()
+                assert response["type"] == "chat_response"
+                assert response["payload"]["message"] == "Response"
+
+    def test_websocket_cancel_cleanup_on_next_message(self, client, mock_db, mock_config):
+        """Test cancelled task cleanup at start of next loop iteration."""
+        import threading
+        import time
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                ask_release.wait(timeout=5)
+                # Simulate ask() appending to conversation history
+                mock_session.chat_interface._conversation_history.extend([
+                    {"role": "user", "content": "ctx"},
+                    {"role": "assistant", "content": "resp"},
+                ])
+                return ("Response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Hello"}
+                })
+                websocket.send_json({"type": "cancel"})
+                response = websocket.receive_json()
+                assert response["type"] == "cancelled"
+
+                # Release ask and let the thread finish
+                ask_release.set()
+                time.sleep(0.2)
+
+                # Send ping to trigger next loop iteration;
+                # pending_cancel_task.done() is True → cleanup at lines 71-76
+                websocket.send_json({"type": "ping"})
+                response = websocket.receive_json()
+                assert response["type"] == "pong"
+
+                # History should have been truncated back to pre-ask length (0)
+                assert len(mock_session.chat_interface._conversation_history) == 0
+
+    def test_websocket_cancel_cleanup_before_new_chat(self, client, mock_db, mock_config):
+        """Test pending cancel task is awaited before processing a new chat."""
+        import threading
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            call_count = 0
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    ask_release.wait(timeout=5)
+                    mock_session.chat_interface._conversation_history.extend([
+                        {"role": "user", "content": "ctx1"},
+                        {"role": "assistant", "content": "resp1"},
+                    ])
+                return ("Second response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                # First chat (blocks)
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "First"}
+                })
+                websocket.send_json({"type": "cancel"})
+                response = websocket.receive_json()
+                assert response["type"] == "cancelled"
+
+                # Send second chat while first task is still pending;
+                # server hits lines 126-135 (await pending, truncate, reset)
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Second"}
+                })
+                # Release first ask so the await in the handler completes
+                ask_release.set()
+
+                response = websocket.receive_json()
+                assert response["type"] == "chat_response"
+                assert response["payload"]["message"] == "Second response"
+
+    def test_websocket_disconnect_with_pending_cancel(self, client, mock_db, mock_config):
+        """Test session cleanup on disconnect with a pending cancelled task."""
+        import threading
+
+        with patch('src.api.routers.chat.session_manager') as mock_manager:
+            mock_session = Mock()
+            mock_session.session_id = "test-session-id"
+            mock_session.chat_interface._conversation_history = []
+
+            ask_release = threading.Event()
+
+            def blocking_ask(query):
+                ask_release.wait(timeout=5)
+                return ("Response", [], None)
+
+            mock_session.chat_interface.ask.side_effect = blocking_ask
+            mock_manager.create_session.return_value = mock_session
+
+            with client.websocket_connect("/ws/chat") as websocket:
+                websocket.receive_json()  # connected
+
+                websocket.send_json({
+                    "type": "chat",
+                    "payload": {"message": "Hello"}
+                })
+                websocket.send_json({"type": "cancel"})
+                response = websocket.receive_json()
+                assert response["type"] == "cancelled"
+
+            # Disconnect happened with pending cancel task still running;
+            # finally block (lines 243-246) cancels and awaits the task
+            ask_release.set()  # Clean up the blocked thread
             mock_manager.remove_session.assert_called_with("test-session-id")
 
 
