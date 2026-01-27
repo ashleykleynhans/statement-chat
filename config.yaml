@@ -89,7 +89,6 @@ classification_rules:
   "AddedServFees": fees
   "Bank fee": fees
   "Fees PymtFee": fees
-  "Fees": fees
   "Service Fee": fees
   "Monthly Fee": fees
   "Paypal Withdrawal Fee": fees
