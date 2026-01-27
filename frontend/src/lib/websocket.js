@@ -129,6 +129,10 @@ function handleMessage(data) {
       ]);
       break;
 
+    case 'cancelled':
+      isThinking.set(false);
+      break;
+
     case 'pong':
       // Heartbeat response, ignore
       break;
@@ -186,6 +190,16 @@ export function clearMessages() {
   // Also clear server-side context (conversation history, cached transactions)
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'clear' }));
+  }
+}
+
+/**
+ * Cancel an in-progress chat request.
+ */
+export function cancelMessage() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'cancel' }));
+    isThinking.set(false);
   }
 }
 

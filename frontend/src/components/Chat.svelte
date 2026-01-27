@@ -4,6 +4,7 @@
     connect,
     disconnect,
     sendMessage,
+    cancelMessage,
     clearMessages,
     messages,
     isConnected,
@@ -42,7 +43,15 @@
       handleSubmit(event);
     }
   }
+
+  function handleGlobalKeyDown(event) {
+    if (event.key === 'Escape' && $isThinking) {
+      cancelMessage();
+    }
+  }
 </script>
+
+<svelte:window on:keydown={handleGlobalKeyDown} />
 
 <div class="flex flex-col h-full">
   <!-- Header -->
@@ -113,6 +122,7 @@
                 <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
               </div>
               <span class="text-sm text-gray-500 dark:text-gray-400">Thinking...</span>
+              <span class="text-xs text-gray-400 dark:text-gray-500 ml-2">Press Esc to cancel</span>
             </div>
           </div>
         </div>

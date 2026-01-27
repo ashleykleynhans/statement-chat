@@ -1,5 +1,6 @@
 """WebSocket endpoint for real-time chat."""
 
+import asyncio
 import json
 from datetime import datetime
 
@@ -19,11 +20,13 @@ async def websocket_chat(websocket: WebSocket) -> None:
     Message Protocol:
         Client -> Server:
             {"type": "chat", "payload": {"message": "..."}}
+            {"type": "cancel"}
             {"type": "ping"}
 
         Server -> Client:
             {"type": "connected", "payload": {"session_id": "...", "stats": {...}}}
             {"type": "chat_response", "payload": {"message": "...", "transactions": [...], "timestamp": "..."}}
+            {"type": "cancelled"}
             {"type": "error", "payload": {"code": "...", "message": "..."}}
             {"type": "pong"}
     """
@@ -42,6 +45,11 @@ async def websocket_chat(websocket: WebSocket) -> None:
         model=config["llm"]["model"],
     )
 
+    # Track a cancelled-but-still-running LLM task so we can clean up
+    # its conversation history changes once the thread finishes.
+    pending_cancel_task = None
+    pending_cancel_history_len = 0
+
     try:
         # Send connection acknowledgment with stats
         stats = db.get_stats()
@@ -57,6 +65,16 @@ async def websocket_chat(websocket: WebSocket) -> None:
 
         # Message loop
         while True:
+            # Non-blocking cleanup: if a previously cancelled LLM thread
+            # has finished, roll back its conversation history changes.
+            if pending_cancel_task is not None and pending_cancel_task.done():
+                session.chat_interface._conversation_history[:] = (
+                    session.chat_interface._conversation_history[
+                        :pending_cancel_history_len
+                    ]
+                )
+                pending_cancel_task = None
+
             data = await websocket.receive_text()
 
             try:
@@ -102,15 +120,86 @@ async def websocket_chat(websocket: WebSocket) -> None:
 
                 session.touch()
 
+                # If a previous cancelled LLM thread is still running,
+                # wait for it to finish so we can safely reset history.
+                if pending_cancel_task is not None:
+                    try:
+                        await pending_cancel_task
+                    except Exception:
+                        pass
+                    session.chat_interface._conversation_history[:] = (
+                        session.chat_interface._conversation_history[
+                            :pending_cancel_history_len
+                        ]
+                    )
+                    pending_cancel_task = None
+
+                # Snapshot history length so we can roll back on cancel.
+                history_len = len(
+                    session.chat_interface._conversation_history
+                )
+
+                # Run the blocking LLM call in a background thread so the
+                # WebSocket stays responsive to cancel / ping messages.
+                ask_task = asyncio.ensure_future(
+                    asyncio.to_thread(session.chat_interface.ask, query)
+                )
+
+                cancelled = False
+
+                while not ask_task.done():
+                    recv_task = asyncio.ensure_future(
+                        websocket.receive_text()
+                    )
+                    done, _pending = await asyncio.wait(
+                        {ask_task, recv_task},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+
+                    # If the LLM finished first, cancel the pending receive
+                    # and break out so we can send the response.
+                    if recv_task not in done:
+                        recv_task.cancel()
+                        try:
+                            await recv_task
+                        except asyncio.CancelledError:
+                            pass
+                        break
+
+                    # A WebSocket message arrived — handle it.
+                    try:
+                        inner_raw = recv_task.result()
+                        inner_data = json.loads(inner_raw)
+                    except WebSocketDisconnect:
+                        raise
+                    except Exception:
+                        continue
+
+                    inner_type = inner_data.get("type")
+
+                    if inner_type == "cancel":
+                        cancelled = True
+                        await websocket.send_json({"type": "cancelled"})
+                        # The thread is still running; stash it for cleanup.
+                        pending_cancel_task = ask_task
+                        pending_cancel_history_len = history_len
+                        break
+                    elif inner_type == "ping":
+                        await websocket.send_json({"type": "pong"})
+                    # Any other message type is ignored while waiting.
+
+                if cancelled:
+                    continue
+
                 try:
-                    # Use the ChatInterface's ask method
-                    # Returns (response_text, transactions, llm_stats) tuple
-                    response_text, transactions, llm_stats = session.chat_interface.ask(query)
+                    response_text, transactions, llm_stats = (
+                        ask_task.result()
+                    )
 
                     # Limit to 20 transactions, frontend filters out fees
                     transactions = transactions[:20]
 
-                    payload = {
+                    resp_payload = {
                         "message": response_text,
                         "transactions": transactions,
                         "timestamp": datetime.now().isoformat(),
@@ -118,12 +207,12 @@ async def websocket_chat(websocket: WebSocket) -> None:
 
                     # Include LLM stats if available
                     if llm_stats:
-                        payload["llm_stats"] = llm_stats
+                        resp_payload["llm_stats"] = llm_stats
 
                     await websocket.send_json(
                         {
                             "type": "chat_response",
-                            "payload": payload,
+                            "payload": resp_payload,
                         }
                     )
                 except Exception as e:
@@ -150,4 +239,10 @@ async def websocket_chat(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        if pending_cancel_task is not None and not pending_cancel_task.done():
+            pending_cancel_task.cancel()
+            try:
+                await pending_cancel_task
+            except (asyncio.CancelledError, Exception):
+                pass
         session_manager.remove_session(session.session_id)
