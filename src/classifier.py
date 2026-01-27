@@ -130,6 +130,134 @@ Rules:
                 confidence="low"
             )
 
+    def classify_rules_only(self, description: str, amount: float) -> ClassificationResult | None:
+        """Classify using rules only, returning None if no rule matches."""
+        rule_category = self._check_rules(description)
+        if rule_category:
+            return ClassificationResult(
+                category=rule_category,
+                recipient_or_payer=None,
+                confidence="high"
+            )
+        return None
+
+    def classify_batch_llm(
+        self,
+        transactions: list[dict],
+        batch_size: int = 15
+    ) -> list[ClassificationResult]:
+        """Classify multiple transactions via LLM in batches.
+
+        Sends multiple transactions per LLM call to reduce round-trips.
+
+        Args:
+            transactions: List of dicts with 'description' and 'amount' keys
+            batch_size: Number of transactions per LLM call
+
+        Returns:
+            List of ClassificationResult objects in the same order
+        """
+        if not transactions:
+            return []
+
+        all_results: list[ClassificationResult] = []
+
+        for i in range(0, len(transactions), batch_size):
+            batch = transactions[i:i + batch_size]
+            results = self._classify_llm_batch(batch)
+            all_results.extend(results)
+
+        return all_results
+
+    def _classify_llm_batch(self, batch: list[dict]) -> list[ClassificationResult]:
+        """Send a single batch of transactions to the LLM for classification."""
+        lines = []
+        for idx, tx in enumerate(batch):
+            desc = tx.get("description", "")
+            amount = tx.get("amount", 0)
+            tx_type = "expense" if amount < 0 else "income"
+            lines.append(f"{idx + 1}. \"{desc}\" | {tx_type} | {abs(amount):.2f}")
+
+        transactions_text = "\n".join(lines)
+
+        prompt = f"""Classify each bank transaction into a category.
+
+Transactions:
+{transactions_text}
+
+Available categories: {', '.join(self.categories)}
+
+Respond with ONLY a JSON array (no markdown, no explanation). One object per transaction, in order:
+[{{"category": "...", "recipient_or_payer": "..." or null}}, ...]
+
+Rules:
+- category must be one from the available categories list
+- recipient_or_payer should be the business/person name if identifiable, otherwise null
+"""
+
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1
+            )
+
+            return self._parse_batch_response(response.choices[0].message.content, len(batch))
+        except Exception:
+            return [
+                ClassificationResult(category="other", recipient_or_payer=None, confidence="low")
+                for _ in batch
+            ]
+
+    def _parse_batch_response(self, response: str, expected_count: int) -> list[ClassificationResult]:
+        """Parse a batch LLM response into a list of ClassificationResults."""
+        response = response.strip()
+
+        # Remove markdown code blocks if present
+        if response.startswith("```"):
+            lines = response.split("\n")
+            response = "\n".join(lines[1:-1] if lines[-1].strip().startswith("```") else lines[1:])
+            response = response.strip()
+
+        # Try to find JSON array
+        bracket_start = response.find("[")
+        bracket_end = response.rfind("]")
+        if bracket_start != -1 and bracket_end != -1:
+            response = response[bracket_start:bracket_end + 1]
+
+        try:
+            data = json.loads(response)
+            if not isinstance(data, list):
+                raise ValueError("Expected array")
+
+            results = []
+            for item in data:
+                category = item.get("category", "other")
+                if category not in self.categories:
+                    category = "other"
+                recipient = item.get("recipient_or_payer")
+                if recipient == "null":
+                    recipient = None
+                results.append(ClassificationResult(
+                    category=category,
+                    recipient_or_payer=recipient,
+                    confidence=item.get("confidence", "medium")
+                ))
+
+            # Pad if LLM returned fewer results than expected
+            while len(results) < expected_count:
+                results.append(ClassificationResult(
+                    category="other", recipient_or_payer=None, confidence="low"
+                ))
+
+            return results[:expected_count]
+
+        except (json.JSONDecodeError, ValueError):
+            return [
+                ClassificationResult(category="other", recipient_or_payer=None, confidence="low")
+                for _ in range(expected_count)
+            ]
+
     def classify_batch(
         self,
         transactions: list[dict]

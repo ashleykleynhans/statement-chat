@@ -163,6 +163,22 @@ class TestResponseParsing:
         assert result.recipient_or_payer is None
 
 
+class TestRulesOnlyClassification:
+    """Tests for classify_rules_only method."""
+
+    def test_returns_result_when_rule_matches(self, classifier):
+        """Test returns ClassificationResult when rule matches."""
+        result = classifier.classify_rules_only("Woolworths Food", -500)
+        assert result is not None
+        assert result.category == "groceries"
+        assert result.confidence == "high"
+
+    def test_returns_none_when_no_rule_matches(self, classifier):
+        """Test returns None when no rule matches."""
+        result = classifier.classify_rules_only("Random Transaction", -100)
+        assert result is None
+
+
 class TestBatchClassification:
     """Tests for batch classification."""
 
@@ -180,6 +196,134 @@ class TestBatchClassification:
         assert results[0].category == "groceries"
         assert results[1].category == "fuel"
         assert results[2].category == "salary"
+
+
+class TestBatchLLMClassification:
+    """Tests for batch LLM classification."""
+
+    def test_batch_llm_empty_list(self, classifier):
+        """Test batch LLM with empty list returns empty."""
+        results = classifier.classify_batch_llm([])
+        assert results == []
+
+    def test_batch_llm_success(self, classifier):
+        """Test batch LLM classifies multiple transactions in one call."""
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(
+            content='[{"category": "groceries", "recipient_or_payer": "Shop"}, {"category": "fuel", "recipient_or_payer": null}]'
+        ))]
+        classifier._client.chat.completions.create.return_value = mock_response
+
+        transactions = [
+            {"description": "Some shop", "amount": -500},
+            {"description": "Gas station", "amount": -300},
+        ]
+        results = classifier.classify_batch_llm(transactions)
+
+        assert len(results) == 2
+        assert results[0].category == "groceries"
+        assert results[0].recipient_or_payer == "Shop"
+        assert results[1].category == "fuel"
+        assert results[1].recipient_or_payer is None
+        # Should be a single LLM call for the batch
+        assert classifier._client.chat.completions.create.call_count == 1
+
+    def test_batch_llm_handles_error(self, classifier):
+        """Test batch LLM returns defaults on error."""
+        classifier._client.chat.completions.create.side_effect = Exception("Connection error")
+
+        transactions = [
+            {"description": "Shop", "amount": -500},
+            {"description": "Gas", "amount": -300},
+        ]
+        results = classifier.classify_batch_llm(transactions)
+
+        assert len(results) == 2
+        assert all(r.category == "other" for r in results)
+        assert all(r.confidence == "low" for r in results)
+
+    def test_batch_llm_splits_large_batches(self, classifier):
+        """Test large lists are split into multiple LLM calls."""
+        mock_response = Mock()
+        # Return valid response for each batch
+        mock_response.choices = [Mock(message=Mock(
+            content='[' + ','.join(['{"category": "other", "recipient_or_payer": null}'] * 15) + ']'
+        ))]
+        classifier._client.chat.completions.create.return_value = mock_response
+
+        transactions = [{"description": f"Tx {i}", "amount": -100} for i in range(20)]
+        results = classifier.classify_batch_llm(transactions, batch_size=15)
+
+        assert len(results) == 20
+        # Should be 2 LLM calls: 15 + 5
+        assert classifier._client.chat.completions.create.call_count == 2
+
+
+class TestBatchResponseParsing:
+    """Tests for _parse_batch_response."""
+
+    def test_parse_valid_array(self, classifier):
+        """Test parsing valid JSON array."""
+        response = '[{"category": "groceries", "recipient_or_payer": "Shop"}, {"category": "fuel", "recipient_or_payer": null}]'
+        results = classifier._parse_batch_response(response, 2)
+
+        assert len(results) == 2
+        assert results[0].category == "groceries"
+        assert results[1].category == "fuel"
+
+    def test_parse_array_with_markdown(self, classifier):
+        """Test parsing JSON array wrapped in markdown."""
+        response = '```json\n[{"category": "fuel", "recipient_or_payer": null}]\n```'
+        results = classifier._parse_batch_response(response, 1)
+
+        assert len(results) == 1
+        assert results[0].category == "fuel"
+
+    def test_parse_invalid_json(self, classifier):
+        """Test parsing invalid JSON returns defaults."""
+        results = classifier._parse_batch_response("not json", 3)
+
+        assert len(results) == 3
+        assert all(r.category == "other" for r in results)
+
+    def test_parse_pads_missing_results(self, classifier):
+        """Test pads with defaults when LLM returns fewer than expected."""
+        response = '[{"category": "fuel", "recipient_or_payer": null}]'
+        results = classifier._parse_batch_response(response, 3)
+
+        assert len(results) == 3
+        assert results[0].category == "fuel"
+        assert results[1].category == "other"
+        assert results[2].category == "other"
+
+    def test_parse_truncates_extra_results(self, classifier):
+        """Test truncates when LLM returns more than expected."""
+        response = '[{"category": "fuel", "recipient_or_payer": null}, {"category": "groceries", "recipient_or_payer": null}, {"category": "other", "recipient_or_payer": null}]'
+        results = classifier._parse_batch_response(response, 2)
+
+        assert len(results) == 2
+
+    def test_parse_invalid_category_defaults_to_other(self, classifier):
+        """Test invalid category in batch response defaults to other."""
+        response = '[{"category": "invalid_cat", "recipient_or_payer": null}]'
+        results = classifier._parse_batch_response(response, 1)
+
+        assert results[0].category == "other"
+
+    def test_parse_null_string_recipient(self, classifier):
+        """Test string 'null' for recipient converts to None."""
+        response = '[{"category": "fuel", "recipient_or_payer": "null"}]'
+        results = classifier._parse_batch_response(response, 1)
+
+        assert results[0].recipient_or_payer is None
+
+    def test_parse_non_array_json(self, classifier):
+        """Test non-array JSON returns defaults."""
+        response = '{"category": "fuel"}'
+        results = classifier._parse_batch_response(response, 2)
+
+        assert len(results) == 2
+        assert all(r.category == "other" for r in results)
 
 
 class TestConnectionCheck:

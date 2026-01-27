@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 from watchdog.events import FileCreatedEvent
 
-from src.watcher import StatementHandler, StatementWatcher, import_existing, reimport_statement
+from rich.console import Console as RichConsole
+from src.watcher import StatementHandler, StatementWatcher, import_existing, reimport_statement, _classify_and_prepare
 from src.parsers.base import StatementData, Transaction
 from src.classifier import ClassificationResult
 
@@ -25,6 +26,11 @@ def mock_classifier():
     """Create a mock classifier."""
     classifier = Mock()
     classifier.classify.return_value = ClassificationResult(
+        category="other",
+        recipient_or_payer=None,
+        confidence="high"
+    )
+    classifier.classify_rules_only.return_value = ClassificationResult(
         category="other",
         recipient_or_payer=None,
         confidence="high"
@@ -484,8 +490,8 @@ class TestReimportStatement:
         with patch('src.watcher.get_parser', return_value=mock_parser):
             reimport_statement(pdf_file, mock_db, "fnb", mock_classifier)
 
-        # Classifier should be called for each transaction
-        assert mock_classifier.classify.call_count == 2
+        # Classifier should be called for each transaction (rules first)
+        assert mock_classifier.classify_rules_only.call_count == 2
 
     def test_reimport_credit_transaction(self, mock_db, mock_classifier, tmp_path):
         """Test reimport correctly identifies credit transactions."""
@@ -514,3 +520,80 @@ class TestReimportStatement:
         call_args = mock_db.insert_transactions_batch.call_args[0]
         transactions = call_args[1]
         assert transactions[0]["transaction_type"] == "credit"
+
+
+class TestClassifyAndPrepare:
+    """Tests for _classify_and_prepare helper."""
+
+    def test_all_matched_by_rules(self, mock_classifier):
+        """Test when all transactions match rules (no LLM calls)."""
+        console = Mock()
+        txs = [
+            Transaction(date="2025-01-01", description="Groceries", amount=-100.00),
+            Transaction(date="2025-01-02", description="Salary", amount=5000.00),
+        ]
+
+        results = _classify_and_prepare(txs, mock_classifier, console)
+
+        assert len(results) == 2
+        assert results[0]["category"] == "other"
+        assert results[1]["transaction_type"] == "credit"
+        mock_classifier.classify_batch_llm.assert_not_called()
+
+    def test_llm_fallback_for_unmatched(self, mock_classifier):
+        """Test LLM is called for transactions not matched by rules."""
+        console = RichConsole(quiet=True)
+        mock_classifier.classify_rules_only.side_effect = [
+            ClassificationResult(category="groceries", recipient_or_payer=None, confidence="high"),
+            None,  # No rule match
+        ]
+        mock_classifier.classify_batch_llm.return_value = [
+            ClassificationResult(category="fuel", recipient_or_payer="Shell", confidence="medium"),
+        ]
+
+        txs = [
+            Transaction(date="2025-01-01", description="Woolworths", amount=-100.00),
+            Transaction(date="2025-01-02", description="Unknown Station", amount=-200.00),
+        ]
+
+        results = _classify_and_prepare(txs, mock_classifier, console)
+
+        assert len(results) == 2
+        assert results[0]["category"] == "groceries"
+        assert results[1]["category"] == "fuel"
+        assert results[1]["recipient_or_payer"] == "Shell"
+        mock_classifier.classify_batch_llm.assert_called_once()
+
+    def test_all_need_llm(self, mock_classifier):
+        """Test when no transactions match rules."""
+        console = RichConsole(quiet=True)
+        mock_classifier.classify_rules_only.return_value = None
+        mock_classifier.classify_batch_llm.return_value = [
+            ClassificationResult(category="other", recipient_or_payer=None, confidence="low"),
+            ClassificationResult(category="other", recipient_or_payer=None, confidence="low"),
+        ]
+
+        txs = [
+            Transaction(date="2025-01-01", description="Unknown1", amount=-100.00),
+            Transaction(date="2025-01-02", description="Unknown2", amount=-200.00),
+        ]
+
+        results = _classify_and_prepare(txs, mock_classifier, console)
+
+        assert len(results) == 2
+        assert all(r["category"] == "other" for r in results)
+
+    def test_debit_and_credit_types(self, mock_classifier):
+        """Test transaction types are set correctly."""
+        console = Mock()
+        txs = [
+            Transaction(date="2025-01-01", description="Purchase", amount=-100.00),
+            Transaction(date="2025-01-02", description="Deposit", amount=500.00),
+        ]
+
+        results = _classify_and_prepare(txs, mock_classifier, console)
+
+        assert results[0]["transaction_type"] == "debit"
+        assert results[0]["amount"] == 100.00
+        assert results[1]["transaction_type"] == "credit"
+        assert results[1]["amount"] == 500.00

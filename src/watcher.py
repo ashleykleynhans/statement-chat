@@ -14,6 +14,79 @@ from .database import Database
 from .parsers import get_parser
 
 
+def _classify_and_prepare(
+    transactions: list,
+    classifier: TransactionClassifier,
+    console: Console,
+) -> list[dict]:
+    """Classify transactions using rules first, then batch LLM for the rest.
+
+    Returns a list of dicts ready for database insertion.
+    """
+    # First pass: classify with rules only (instant)
+    results: list[dict] = []
+    needs_llm: list[tuple[int, object]] = []  # (index, tx)
+
+    for i, tx in enumerate(transactions):
+        tx_type = "credit" if tx.amount > 0 else "debit"
+        classification = classifier.classify_rules_only(tx.description, tx.amount)
+
+        entry = {
+            "date": tx.date,
+            "description": tx.description,
+            "amount": abs(tx.amount),
+            "balance": tx.balance,
+            "transaction_type": tx_type,
+            "category": None,
+            "recipient_or_payer": None,
+            "reference": tx.reference,
+            "raw_text": tx.raw_text,
+        }
+
+        if classification:
+            entry["category"] = classification.category
+            entry["recipient_or_payer"] = classification.recipient_or_payer
+        else:
+            needs_llm.append((i, tx))
+
+        results.append(entry)
+
+    rule_count = len(transactions) - len(needs_llm)
+    if rule_count:
+        console.print(f"[dim]  {rule_count} classified by rules[/dim]")
+
+    # Second pass: batch LLM for unclassified transactions
+    if needs_llm:
+        llm_inputs = [
+            {"description": tx.description, "amount": tx.amount}
+            for _, tx in needs_llm
+        ]
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(
+                "Classifying with LLM", total=len(llm_inputs)
+            )
+            llm_results = []
+            for batch_start in range(0, len(llm_inputs), 15):
+                batch = llm_inputs[batch_start:batch_start + 15]
+                batch_results = classifier.classify_batch_llm(batch, batch_size=len(batch))
+                llm_results.extend(batch_results)
+                progress.advance(task, advance=len(batch))
+
+        for (idx, _tx), classification in zip(needs_llm, llm_results):
+            results[idx]["category"] = classification.category
+            results[idx]["recipient_or_payer"] = classification.recipient_or_payer
+
+    return results
+
+
 class StatementHandler(FileSystemEventHandler):
     """Handle new PDF files in the statements directory."""
 
@@ -71,38 +144,10 @@ class StatementHandler(FileSystemEventHandler):
                 statement_number=statement_data.statement_number
             )
 
-            # Process and classify transactions
-            transactions_to_insert = []
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TimeElapsedColumn(),
-                console=self.console,
-            ) as progress:
-                task = progress.add_task(
-                    "Classifying transactions", total=len(statement_data.transactions)
-                )
-                for tx in statement_data.transactions:
-                    # Determine transaction type
-                    tx_type = "credit" if tx.amount > 0 else "debit"
-
-                    # Classify with LLM
-                    classification = self.classifier.classify(tx.description, tx.amount)
-
-                    transactions_to_insert.append({
-                        "date": tx.date,
-                        "description": tx.description,
-                        "amount": abs(tx.amount),
-                        "balance": tx.balance,
-                        "transaction_type": tx_type,
-                        "category": classification.category,
-                        "recipient_or_payer": classification.recipient_or_payer,
-                        "reference": tx.reference,
-                        "raw_text": tx.raw_text
-                    })
-                    progress.advance(task)
+            # Classify transactions (rules first, then batch LLM)
+            transactions_to_insert = _classify_and_prepare(
+                statement_data.transactions, self.classifier, self.console
+            )
 
             # Batch insert
             self.db.insert_transactions_batch(statement_id, transactions_to_insert)
@@ -227,34 +272,9 @@ def import_existing(
                 statement_number=statement_data.statement_number
             )
 
-            transactions_to_insert = []
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TimeElapsedColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task(
-                    "Classifying transactions", total=len(statement_data.transactions)
-                )
-                for tx in statement_data.transactions:
-                    tx_type = "credit" if tx.amount > 0 else "debit"
-                    classification = classifier.classify(tx.description, tx.amount)
-
-                    transactions_to_insert.append({
-                        "date": tx.date,
-                        "description": tx.description,
-                        "amount": abs(tx.amount),
-                        "balance": tx.balance,
-                        "transaction_type": tx_type,
-                        "category": classification.category,
-                        "recipient_or_payer": classification.recipient_or_payer,
-                        "reference": tx.reference,
-                        "raw_text": tx.raw_text
-                    })
-                    progress.advance(task)
+            transactions_to_insert = _classify_and_prepare(
+                statement_data.transactions, classifier, console
+            )
 
             db.insert_transactions_batch(statement_id, transactions_to_insert)
 
@@ -307,34 +327,9 @@ def reimport_statement(
             statement_number=statement_data.statement_number
         )
 
-        transactions_to_insert = []
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(
-                "Classifying transactions", total=len(statement_data.transactions)
-            )
-            for tx in statement_data.transactions:
-                tx_type = "credit" if tx.amount > 0 else "debit"
-                classification = classifier.classify(tx.description, tx.amount)
-
-                transactions_to_insert.append({
-                    "date": tx.date,
-                    "description": tx.description,
-                    "amount": abs(tx.amount),
-                    "balance": tx.balance,
-                    "transaction_type": tx_type,
-                    "category": classification.category,
-                    "recipient_or_payer": classification.recipient_or_payer,
-                    "reference": tx.reference,
-                    "raw_text": tx.raw_text
-                })
-                progress.advance(task)
+        transactions_to_insert = _classify_and_prepare(
+            statement_data.transactions, classifier, console
+        )
 
         db.insert_transactions_batch(statement_id, transactions_to_insert)
 
