@@ -54,6 +54,8 @@ def chat(mock_db):
     with patch("src.chat.OpenAI") as mock_openai:
         mock_client = MagicMock()
         mock_openai.return_value = mock_client
+        # with_options() returns a copy; keep the same mock so responses work
+        mock_client.with_options.return_value = mock_client
         # Default LLM response
         mock_client.chat.completions.create.return_value = mock_openai_response("Test response")
 
@@ -276,10 +278,12 @@ class TestTypoCorrection:
             {"date": "2025-01-22", "description": "Netflix.com", "amount": -199.00,
              "category": "subscriptions", "transaction_type": "debit"},
         ]
-        # First call is proper noun search for "metaflix" (no results),
-        # then LLM corrects to "netflix" which finds results
+        # 1) proper noun "metaflix" → no results
+        # 2) simple term "metaflix" → no results
+        # 3) LLM corrects to "netflix" → found
         mock_db.search_transactions.side_effect = [
             [],  # "metaflix" (proper noun detection)
+            [],  # "metaflix" (simple terms, fast path)
             netflix_result,  # "netflix" (LLM correction)
         ]
 

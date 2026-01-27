@@ -45,7 +45,9 @@ def mock_db():
 def chat(mock_db):
     """Create a chat interface with mock database."""
     with patch('src.chat.OpenAI'):
-        return ChatInterface(mock_db)
+        c = ChatInterface(mock_db)
+        c._client.with_options.return_value = c._client
+        return c
 
 
 class TestChatInit:

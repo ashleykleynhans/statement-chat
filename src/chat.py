@@ -26,7 +26,8 @@ class ChatInterface:
         self.model = model
         self._client = OpenAI(
             base_url=f"http://{host}:{port}/v1",
-            api_key="lm-studio"  # LM Studio doesn't require a real key
+            api_key="lm-studio",  # LM Studio doesn't require a real key
+            timeout=60.0,
         )
         self.console = Console()
         self._conversation_history = []
@@ -353,49 +354,70 @@ class ChatInterface:
                 if filtered:
                     return limit_if_when_last(filtered)
 
-        # Extract potential search terms
-        search_terms = self._extract_search_terms(query)
-
         # Helper to filter out fee transactions (unless specifically searching for fees)
         def filter_fees(results: list[dict], query: str) -> list[dict]:
             if "fee" in query.lower():
                 return results  # Keep fees if user asked about fees
             return [tx for tx in results if tx.get("category") != "fees"]
 
-        # First try multi-word phrases (e.g., "ceiling repairs" not just "ceiling")
-        if len(search_terms) >= 2:
-            # Try pairs of consecutive terms as phrases
-            for i in range(len(search_terms) - 1):
-                phrase = f"{search_terms[i]} {search_terms[i+1]}"
-                results = self.db.search_transactions(phrase)
-                if results:
-                    filtered = filter_fees(results, query)
-                    if filtered:
-                        return limit_if_when_last(filtered)
+        def _search_with_terms(search_terms: list[str]) -> list[dict] | None:
+            """Try searching DB with given terms. Returns results or None."""
+            # First try multi-word phrases (e.g., "ceiling repairs" not just "ceiling")
+            if len(search_terms) >= 2:
+                for i in range(len(search_terms) - 1):
+                    phrase = f"{search_terms[i]} {search_terms[i+1]}"
+                    results = self.db.search_transactions(phrase)
+                    if results:
+                        filtered = filter_fees(results, query)
+                        if filtered:
+                            return limit_if_when_last(filtered)
 
-        # Fall back to individual terms
-        for term in search_terms:
-            # Try original term
-            results = self.db.search_transactions(term)
-            if results:
-                filtered = filter_fees(results, query)
-                if filtered:
-                    return limit_if_when_last(filtered)
-            # Try hyphen variations (xray <-> x-ray, e-mail <-> email)
-            variations = []
-            if "-" in term:
-                variations.append(term.replace("-", ""))
-            else:
-                # Common single-letter prefixes that might have hyphens
-                for prefix in ["x", "e", "t", "re", "pre"]:
-                    if term.startswith(prefix) and len(term) > len(prefix):
-                        variations.append(prefix + "-" + term[len(prefix):])
-            for variant in variations:
-                results = self.db.search_transactions(variant)
+            # Fall back to individual terms
+            for term in search_terms:
+                results = self.db.search_transactions(term)
                 if results:
                     filtered = filter_fees(results, query)
                     if filtered:
                         return limit_if_when_last(filtered)
+                # Try hyphen variations (xray <-> x-ray, e-mail <-> email)
+                variations = []
+                if "-" in term:
+                    variations.append(term.replace("-", ""))
+                else:
+                    for prefix in ["x", "e", "t", "re", "pre"]:
+                        if term.startswith(prefix) and len(term) > len(prefix):
+                            variations.append(prefix + "-" + term[len(prefix):])
+                for variant in variations:
+                    results = self.db.search_transactions(variant)
+                    if results:
+                        filtered = filter_fees(results, query)
+                        if filtered:
+                            return limit_if_when_last(filtered)
+            return None
+
+        # Try simple extraction first (no LLM call) — fast path
+        stop_words = {
+            "when", "did", "i", "the", "a", "an", "to", "for", "of", "in",
+            "my", "me", "last", "first", "how", "much", "many", "what",
+            "where", "why", "show", "find", "get", "list", "all", "pay",
+            "paid", "spend", "spent", "make", "made", "payment", "payments",
+            "send", "sent", "transfer", "transferred", "buy", "bought",
+            "transactions", "transaction",
+        }
+        simple_terms = re.findall(r"\b[a-zA-Z]+(?:-[a-zA-Z]+)*\b", query_lower)
+        simple_terms = [w for w in simple_terms if w not in stop_words and len(w) > 2]
+
+        if simple_terms:
+            result = _search_with_terms(simple_terms)
+            if result is not None:
+                return result
+
+        # Simple terms found nothing — try LLM for typo correction
+        llm_terms = self._extract_search_terms(query)
+        if llm_terms != simple_terms:
+            result = _search_with_terms(llm_terms)
+            if result is not None:
+                return result
 
         # Only fall back to recent transactions for purely vague queries
         # Check if query only contains vague/generic words
@@ -426,7 +448,7 @@ class ChatInterface:
 
         # Try LLM for typo correction only
         try:
-            response = self._client.chat.completions.create(
+            response = self._client.with_options(timeout=15.0).chat.completions.create(
                 model=self.model,
                 messages=[{
                     "role": "user",
@@ -728,10 +750,12 @@ Question: {query}
 
 Answer concisely and directly."""
 
-        # Add user message to history
+        # Store only the short query in history (not full context) to keep
+        # the conversation history compact for local LLMs.  The full context
+        # with transaction data is only attached to the *current* message.
         self._conversation_history.append({
             "role": "user",
-            "content": user_message
+            "content": query
         })
 
         try:
@@ -745,7 +769,10 @@ Answer concisely and directly."""
             # Slicing can land on an assistant message mid-conversation.
             while recent_history and recent_history[0]["role"] != "user":
                 recent_history = recent_history[1:]
-            messages.extend(recent_history)
+            # Add prior history (without the current query which is last)
+            messages.extend(recent_history[:-1])
+            # Add current query with full context
+            messages.append({"role": "user", "content": user_message})
 
             start_time = time.time()
             response = self._client.chat.completions.create(
