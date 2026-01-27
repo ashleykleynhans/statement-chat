@@ -18,6 +18,9 @@ async function fetchJSON(url, options = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
+    if (error.instructions) {
+      throw new Error(`${error.error} ${error.instructions}`);
+    }
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
 
