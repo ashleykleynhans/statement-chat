@@ -338,6 +338,14 @@ class ChatInterface:
         }
         capitalized_words = re.findall(r'\b[A-Z][a-z]+\b', query)
         proper_nouns = [w for w in capitalized_words if w.lower() not in common_starters]
+        # Also recognize known brand names typed in lowercase (e.g., "spotify")
+        known_brands = {
+            "netflix", "spotify", "youtube", "apple", "google", "amazon",
+            "disney", "dstv", "showmax", "anthropic", "microsoft",
+        }
+        for word in re.findall(r'\b\w+\b', query_lower):
+            if word in known_brands and word.capitalize() not in proper_nouns:
+                proper_nouns.append(word.capitalize())
         if len(proper_nouns) >= 2:
             # Search for the full proper noun phrase (e.g., "Chanel Smith")
             full_name = " ".join(proper_nouns).lower()
