@@ -16,7 +16,7 @@ def db(tmp_path):
 @pytest.fixture
 def db_with_data(db):
     """Create a database with sample data."""
-    stmt_id = db.insert_statement("test.pdf", "12345678901", "2025-01-01")
+    stmt_id = db.insert_statement("test.pdf", bank="fnb", account_number="12345678901", statement_date="2025-01-01")
     db.insert_transaction(
         statement_id=stmt_id,
         date="2025-01-15",
@@ -127,7 +127,7 @@ class TestStatements:
 
     def test_insert_statement(self, db):
         """Test inserting a statement."""
-        stmt_id = db.insert_statement("test.pdf", "12345678901", "2025-01-01")
+        stmt_id = db.insert_statement("test.pdf", bank="fnb", account_number="12345678901", statement_date="2025-01-01")
         assert stmt_id == 1
 
     def test_statement_exists(self, db):
@@ -411,8 +411,8 @@ class TestDeleteStatement:
     def test_delete_statement_only_deletes_target(self, db):
         """Test deleting one statement doesn't affect others."""
         # Insert two statements with transactions
-        stmt1 = db.insert_statement("statement1.pdf", "111", "2025-01-01")
-        stmt2 = db.insert_statement("statement2.pdf", "222", "2025-02-01")
+        stmt1 = db.insert_statement("statement1.pdf", account_number="111", statement_date="2025-01-01")
+        stmt2 = db.insert_statement("statement2.pdf", account_number="222", statement_date="2025-02-01")
 
         db.insert_transaction(stmt1, "2025-01-15", "Tx1", 100.00)
         db.insert_transaction(stmt1, "2025-01-16", "Tx2", 200.00)

@@ -617,6 +617,9 @@
                 Date
               </th>
               <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Bank
+              </th>
+              <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Stmt
               </th>
               <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -635,6 +638,13 @@
               <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                 <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   {formatDate(tx.date)}
+                </td>
+                <td class="px-4 py-3 text-sm text-center whitespace-nowrap">
+                  {#if tx.bank}
+                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">{tx.bank}</span>
+                  {:else}
+                    <span class="text-gray-500 dark:text-gray-500">-</span>
+                  {/if}
                 </td>
                 <td class="px-4 py-3 text-sm text-center whitespace-nowrap">
                   {#if tx.statement_number}
@@ -668,7 +678,7 @@
               </tr>
             {:else}
               <tr>
-                <td colspan="5" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                   No transactions found
                 </td>
               </tr>

@@ -139,6 +139,7 @@ class StatementHandler(FileSystemEventHandler):
             # Insert statement record
             statement_id = self.db.insert_statement(
                 filename=filename,
+                bank=self.bank,
                 account_number=statement_data.account_number,
                 statement_date=statement_data.statement_date,
                 statement_number=statement_data.statement_number
@@ -267,6 +268,7 @@ def import_existing(
 
             statement_id = db.insert_statement(
                 filename=filename,
+                bank=bank,
                 account_number=statement_data.account_number,
                 statement_date=statement_data.statement_date,
                 statement_number=statement_data.statement_number
@@ -322,6 +324,7 @@ def reimport_statement(
 
         statement_id = db.insert_statement(
             filename=filename,
+            bank=bank,
             account_number=statement_data.account_number,
             statement_date=statement_data.statement_date,
             statement_number=statement_data.statement_number

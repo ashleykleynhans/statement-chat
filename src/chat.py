@@ -701,6 +701,7 @@ Query: {query}"""
                 category = tx.get("category", "uncategorized")
                 tx_type = tx.get("transaction_type", "unknown")
                 recipient = tx.get("recipient_or_payer", "")
+                bank = tx.get("bank", "").upper() if tx.get("bank") else ""
 
                 if tx_type == "debit":
                     total_debits += abs(amount)
@@ -711,6 +712,8 @@ Query: {query}"""
                 if recipient:
                     line += f" ({recipient})"
                 line += f" | R{abs(amount):,.2f} {tx_type} | {category}"
+                if bank:
+                    line += f" | {bank}"
                 context_parts.append(line)
 
             if len(sorted_txs) > 15:
@@ -738,8 +741,9 @@ For greetings (hi, hello, hey, etc.), respond with a friendly greeting and offer
 
 When answering questions about spending or transactions:
 - Give a concise summary with the total amount
-- For yes/no questions like "Did I pay X?" or "Have I paid X?", start with yes/no then include the date and amount: "Yes, you paid Paul R500.00 on 15 January 2025."
-- For "when" questions like "When last did I pay X?" or "When did I pay X?", answer with the date directly: "You last paid Paul R500.00 on 15 January 2025." Do NOT start with "Yes".
+- For yes/no questions like "Did I pay X?" or "Have I paid X?", start with yes/no then include the date, amount, and bank: "Yes, you paid Paul R500.00 on 15 January 2025 (FNB)."
+- For "when" questions like "When last did I pay X?" or "When did I pay X?", answer with the date directly: "You last paid Paul R500.00 on 15 January 2025 (FNB)." Do NOT start with "Yes".
+- Always include the bank name in parentheses at the end of transaction details when available (e.g., "FNB", "CAPITEC")
 - Always format dates as "15 January 2025" (day month year), NEVER as "2025-01-15"
 - For single transactions, always mention the date and amount
 - If the context contains transactions, ALWAYS report on them - the user may have misspelled the name
@@ -865,12 +869,14 @@ Answer concisely and directly."""
         """Display transactions in a formatted table."""
         table = Table(title="Matching Transactions", show_lines=True)
         table.add_column("Date", style="cyan")
+        table.add_column("Bank", style="dim")
         table.add_column("Description", style="white")
         table.add_column("Amount", justify="right")
         table.add_column("Category", style="magenta")
 
         for tx in transactions[:10]:
             date = tx.get("date", "")
+            bank = tx.get("bank", "").upper() if tx.get("bank") else "-"
             desc = tx.get("description", "")[:40]
             amount = tx.get("amount", 0)
             category = tx.get("category", "")
@@ -882,7 +888,7 @@ Answer concisely and directly."""
             else:
                 amount_str = f"[green]+{amount_str}[/green]"
 
-            table.add_row(date, desc, amount_str, category or "-")
+            table.add_row(date, bank, desc, amount_str, category or "-")
 
         self.console.print(table)
         self.console.print()

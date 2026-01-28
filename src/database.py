@@ -36,6 +36,7 @@ class Database:
                 CREATE TABLE IF NOT EXISTS statements (
                     id INTEGER PRIMARY KEY,
                     filename TEXT UNIQUE NOT NULL,
+                    bank TEXT,
                     account_number TEXT,
                     statement_date DATE,
                     statement_number TEXT,
@@ -73,11 +74,13 @@ class Database:
                 );
             """)
 
-            # Migration: Add statement_number column if missing (for existing databases)
+            # Migration: Add columns if missing (for existing databases)
             cursor = conn.execute("PRAGMA table_info(statements)")
             columns = [row[1] for row in cursor.fetchall()]
             if "statement_number" not in columns:
                 conn.execute("ALTER TABLE statements ADD COLUMN statement_number TEXT")
+            if "bank" not in columns:
+                conn.execute("ALTER TABLE statements ADD COLUMN bank TEXT")
 
     def statement_exists(self, filename: str) -> bool:
         """Check if a statement has already been imported."""
@@ -91,6 +94,7 @@ class Database:
     def insert_statement(
         self,
         filename: str,
+        bank: str | None = None,
         account_number: str | None = None,
         statement_date: str | None = None,
         statement_number: str | None = None
@@ -98,9 +102,9 @@ class Database:
         """Insert a new statement record and return its ID."""
         with self._get_connection() as conn:
             cursor = conn.execute(
-                """INSERT INTO statements (filename, account_number, statement_date, statement_number)
-                   VALUES (?, ?, ?, ?)""",
-                (filename, account_number, statement_date, statement_number)
+                """INSERT INTO statements (filename, bank, account_number, statement_date, statement_number)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (filename, bank, account_number, statement_date, statement_number)
             )
             return cursor.lastrowid
 
@@ -180,7 +184,7 @@ class Database:
     ) -> list[dict]:
         """Get all transactions with optional pagination."""
         query = """
-            SELECT t.*, s.filename, s.account_number, s.statement_number
+            SELECT t.*, s.filename, s.bank, s.account_number, s.statement_number
             FROM transactions t
             JOIN statements s ON t.statement_id = s.id
             ORDER BY t.date DESC
@@ -196,7 +200,7 @@ class Database:
         """Get all transactions in a specific category."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                """SELECT t.*, s.filename, s.account_number, s.statement_number
+                """SELECT t.*, s.filename, s.bank, s.account_number, s.statement_number
                    FROM transactions t
                    JOIN statements s ON t.statement_id = s.id
                    WHERE t.category = ?
@@ -209,7 +213,7 @@ class Database:
         """Get all debits or credits."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                """SELECT t.*, s.filename, s.account_number, s.statement_number
+                """SELECT t.*, s.filename, s.bank, s.account_number, s.statement_number
                    FROM transactions t
                    JOIN statements s ON t.statement_id = s.id
                    WHERE t.transaction_type = ?
@@ -222,7 +226,7 @@ class Database:
         """Search transactions by description or recipient."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                """SELECT t.*, s.filename, s.account_number, s.statement_number
+                """SELECT t.*, s.filename, s.bank, s.account_number, s.statement_number
                    FROM transactions t
                    JOIN statements s ON t.statement_id = s.id
                    WHERE t.description LIKE ?
@@ -240,7 +244,7 @@ class Database:
         """Get transactions within a date range."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                """SELECT t.*, s.filename, s.account_number, s.statement_number
+                """SELECT t.*, s.filename, s.bank, s.account_number, s.statement_number
                    FROM transactions t
                    JOIN statements s ON t.statement_id = s.id
                    WHERE t.date BETWEEN ? AND ?
@@ -296,7 +300,7 @@ class Database:
         """Get all statements ordered by date descending."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                """SELECT id, filename, account_number, statement_date, statement_number
+                """SELECT id, filename, bank, account_number, statement_date, statement_number
                    FROM statements
                    ORDER BY statement_date DESC"""
             ).fetchall()
@@ -306,7 +310,7 @@ class Database:
         """Get the most recent statement."""
         with self._get_connection() as conn:
             row = conn.execute(
-                """SELECT id, filename, account_number, statement_date, statement_number
+                """SELECT id, filename, bank, account_number, statement_date, statement_number
                    FROM statements
                    ORDER BY statement_date DESC
                    LIMIT 1"""
@@ -348,7 +352,7 @@ class Database:
         """Get all transactions for a specific statement."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                """SELECT t.*, s.filename, s.account_number, s.statement_number
+                """SELECT t.*, s.filename, s.bank, s.account_number, s.statement_number
                    FROM transactions t
                    JOIN statements s ON t.statement_id = s.id
                    WHERE s.statement_number = ?

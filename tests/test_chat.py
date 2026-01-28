@@ -421,6 +421,23 @@ class TestBuildContext:
 
         assert "NO PRICE CHANGE DETECTED" in context
 
+    def test_build_context_includes_bank_name(self, chat, mock_db):
+        """Test building context includes bank name when available."""
+        transactions = [
+            {
+                "date": "2025-01-15",
+                "description": "Woolworths Groceries",
+                "amount": 500.00,
+                "category": "groceries",
+                "transaction_type": "debit",
+                "bank": "fnb",
+            }
+        ]
+
+        context = chat._build_context(transactions, "test query")
+
+        assert "FNB" in context  # Bank should be uppercase
+
 
 class TestPriceChangeDetection:
     """Tests for price change detection."""
