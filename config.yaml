@@ -6,13 +6,12 @@ bank: fnb                    # Options: fnb (more to be added)
 # PDF password (if your bank statements are password-protected)
 # pdf_password: your_password_here
 
-# LLM settings
+# LLM settings (OpenAI-compatible API, e.g., LM Studio)
 llm:
-  backend: mlx                                # "mlx" or "openai"
-  model: mlx-community/GLM-4.7-Flash-4bit    # Model for classification and chat
-  # host/port only used for openai backend:
-  # host: localhost
-  # port: 1234
+  backend: openai                             # Use "openai" for LM Studio, "mlx" for local MLX
+  host: localhost
+  port: 1234                                  # LM Studio default port
+  model: mistralai/ministral-3-14b-reasoning  # Model for classification and chat
 
 # Paths
 paths:
