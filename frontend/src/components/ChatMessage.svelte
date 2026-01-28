@@ -326,7 +326,7 @@
                 <div>
                   <div class="font-medium">{tx.description}</div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">
-                    {formatDate(tx.date)}{#if tx.bank} &middot; <span class="uppercase font-semibold">{tx.bank}</span>{/if} &middot; {tx.category || 'uncategorized'}
+                    {formatDate(tx.date)} {#if tx.bank}&middot; <span class="uppercase font-semibold">{tx.bank}</span> {/if}&middot; {tx.category || 'uncategorized'}
                   </div>
                 </div>
                 <div
