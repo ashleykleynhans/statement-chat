@@ -17,6 +17,7 @@ class TransactionSchema(BaseModel):
     category: str | None = None
     recipient_or_payer: str | None = None
     reference: str | None = None
+    bank: str | None = None
     statement_number: str | None = None
 
 
