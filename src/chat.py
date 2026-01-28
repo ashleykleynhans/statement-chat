@@ -732,6 +732,7 @@ Query: {query}"""
         system_prompt = f"""You are a helpful assistant that answers questions about bank transactions.
 Be concise and direct. Use South African Rand (R) for amounts.
 Always address the user as "you"/"your", never "the user".
+IMPORTANT: Output ONLY the final answer. Do NOT show your reasoning, analysis, or thought process.
 
 For greetings (hi, hello, hey, etc.), respond with a friendly greeting and offer to help with their transactions. Don't list transaction data for greetings.
 

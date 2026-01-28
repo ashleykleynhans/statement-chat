@@ -248,6 +248,25 @@ class TestMLXBackend:
     @patch("mlx_lm.sample_utils.make_sampler")
     @patch("mlx_lm.load")
     @patch("mlx_lm.generate")
+    def test_chat_completion_strips_thinking_without_opening_tag(self, mock_generate_func, mock_load, mock_make_sampler):
+        """Test MLXBackend strips thinking content even without opening tag."""
+        mock_model = Mock()
+        mock_tokenizer = Mock()
+        mock_load.return_value = (mock_model, mock_tokenizer)
+        mock_tokenizer.apply_chat_template.return_value = "prompt"
+        # Model output missing opening <think> tag
+        mock_generate_func.return_value = "Some reasoning here</think>Actual answer"
+
+        backend = MLXBackend(model="test-model")
+        result = backend.chat_completion(
+            messages=[{"role": "user", "content": "Hi"}],
+        )
+
+        assert result.content == "Actual answer"
+
+    @patch("mlx_lm.sample_utils.make_sampler")
+    @patch("mlx_lm.load")
+    @patch("mlx_lm.generate")
     def test_check_connection(self, mock_generate_func, mock_load, mock_make_sampler):
         """Test MLXBackend check_connection."""
         mock_load.return_value = (Mock(), Mock())

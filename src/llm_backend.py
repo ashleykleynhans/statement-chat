@@ -150,8 +150,9 @@ class MLXBackend(LLMBackend):
                 self._model, self._tokenizer, prompt=prompt, verbose=False, **kwargs
             )
 
-        # Strip reasoning/thinking tags
+        # Strip reasoning/thinking tags (handle missing opening tag too)
         content = re.sub(r"<think>.*?</think>\s*", "", content, flags=re.DOTALL)
+        content = re.sub(r"^.*?</think>\s*", "", content, flags=re.DOTALL)
 
         return LLMResponse(content=content)
 
