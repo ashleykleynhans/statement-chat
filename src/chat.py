@@ -819,7 +819,10 @@ Answer concisely and directly."""
             assistant_response = response.content.strip()
             # Strip model reasoning/thinking tags and box formatting markers
             assistant_response = re.sub(r'<think>.*?</think>\s*', '', assistant_response, flags=re.DOTALL)
+            assistant_response = re.sub(r'^.*?</think>\s*', '', assistant_response, flags=re.DOTALL)
             assistant_response = re.sub(r'<\|begin_of_box\|>|<\|end_of_box\|>', '', assistant_response)
+            # Strip verbose reasoning/analysis output (numbered analysis, checklists, etc.)
+            assistant_response = re.sub(r'^\d+\.\s*\*\*Analyze.*?(?=You\s|Your\s|Yes|No[,.])', '', assistant_response, flags=re.DOTALL | re.IGNORECASE)
             assistant_response = assistant_response.strip()
 
             # Extract token usage if available
